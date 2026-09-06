@@ -130,6 +130,8 @@ impl PropertiesPanel {
                     sections::audio_section(ui, &mut world, id);
                     sections::group_control_section(ui, &mut world, id);
                     sections::compositing_section(ui, &mut world, id);
+                    sections::mask_section(ui, &mut world, id);
+                    sections::time_remap_section(ui, &mut world, id);
 
                     ui.separator();
                     ui.colored_label(palette.focus, t!("エフェクト詳細"));

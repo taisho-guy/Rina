@@ -365,6 +365,48 @@ impl TimelineWindow {
                 let ids = self.selection_target_ids(menu.hit_id);
                 self.extract_selection(state, preview_panel, &ids);
             }
+            29 => {
+                let child = menu.hit_id as usize;
+                let parent = item.kind as usize;
+                app_state::active_world(state)
+                    .lock()
+                    .unwrap()
+                    .set_parent(child, Some(parent));
+                self.after_structural_edit(state, preview_panel);
+            }
+            30 => {
+                let child = menu.hit_id as usize;
+                app_state::active_world(state)
+                    .lock()
+                    .unwrap()
+                    .set_parent(child, None);
+                self.after_structural_edit(state, preview_panel);
+            }
+            31 => {
+                let target = menu.hit_id as usize;
+                let source = item.kind as usize;
+                app_state::active_world(state)
+                    .lock()
+                    .unwrap()
+                    .set_track_matte_by_id(
+                        target,
+                        Some(source),
+                        crate::ecs::components::TrackMatteMode::Alpha,
+                    );
+                self.after_structural_edit(state, preview_panel);
+            }
+            32 => {
+                let target = menu.hit_id as usize;
+                app_state::active_world(state)
+                    .lock()
+                    .unwrap()
+                    .set_track_matte_by_id(
+                        target,
+                        None,
+                        crate::ecs::components::TrackMatteMode::Alpha,
+                    );
+                self.after_structural_edit(state, preview_panel);
+            }
             53 => self.select_range = None,
             40 => self.toggle_layer_locked(state, preview_panel, item.kind),
             41 => self.toggle_layer_visible(state, preview_panel, item.kind),

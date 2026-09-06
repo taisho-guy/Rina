@@ -43,10 +43,27 @@ impl EcsWorld {
         self.touch();
     }
 
+    pub fn set_track_matte_by_id(
+        &mut self,
+        object_id: usize,
+        source_object_id: Option<usize>,
+        mode: crate::ecs::components::TrackMatteMode,
+    ) {
+        let matte = source_object_id
+            .and_then(|sid| self.find_entity(sid))
+            .map(|source| TrackMatteSource { source, mode });
+        self.set_track_matte(object_id, matte);
+    }
+
     pub fn track_matte_of(&self, object_id: usize) -> Option<TrackMatteSource> {
         let entity = self.find_entity(object_id)?;
         self.world
             .run(|mattes: View<TrackMatteSource>| mattes.get(entity).ok().copied())
+    }
+
+    pub fn track_matte_source_id_of(&self, object_id: usize) -> Option<usize> {
+        let matte = self.track_matte_of(object_id)?;
+        self.object_id_of(matte.source)
     }
 
     pub fn set_blend_mode(&mut self, object_id: usize, mode: BlendMode) {

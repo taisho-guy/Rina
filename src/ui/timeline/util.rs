@@ -177,6 +177,69 @@ pub(super) fn build_context_menu(
             sep(),
             disabled_leaf(t!("エイリアスをファイルに保存"), 27),
             disabled_leaf(t!("エイリアスを作成"), 28),
+            sep(),
+            {
+                let mut parent_submenu: Vec<ContextMenuItem> = vec![ContextMenuItem {
+                    label: t!("(解除)"),
+                    action: 30,
+                    kind: -1,
+                    enabled: true,
+                    icon: String::new(),
+                    checked: None,
+                    submenu: Vec::new(),
+                }];
+                parent_submenu.extend(objects.iter().filter(|(oid, _)| *oid != hit_id).map(
+                    |(oid, label)| ContextMenuItem {
+                        label: label.clone(),
+                        action: 29,
+                        kind: *oid,
+                        enabled: true,
+                        icon: String::new(),
+                        checked: None,
+                        submenu: Vec::new(),
+                    },
+                ));
+                ContextMenuItem {
+                    label: t!("親レイヤーに設定"),
+                    action: 17,
+                    kind: -1,
+                    enabled: !parent_submenu.is_empty(),
+                    icon: String::new(),
+                    checked: None,
+                    submenu: parent_submenu,
+                }
+            },
+            {
+                let mut matte_submenu: Vec<ContextMenuItem> = vec![ContextMenuItem {
+                    label: t!("(解除)"),
+                    action: 32,
+                    kind: -1,
+                    enabled: true,
+                    icon: String::new(),
+                    checked: None,
+                    submenu: Vec::new(),
+                }];
+                matte_submenu.extend(objects.iter().filter(|(oid, _)| *oid != hit_id).map(
+                    |(oid, label)| ContextMenuItem {
+                        label: label.clone(),
+                        action: 31,
+                        kind: *oid,
+                        enabled: true,
+                        icon: String::new(),
+                        checked: None,
+                        submenu: Vec::new(),
+                    },
+                ));
+                ContextMenuItem {
+                    label: t!("トラックマット元に設定"),
+                    action: 17,
+                    kind: -1,
+                    enabled: !matte_submenu.is_empty(),
+                    icon: String::new(),
+                    checked: None,
+                    submenu: matte_submenu,
+                }
+            },
         ];
     }
 
@@ -192,8 +255,6 @@ pub(super) fn build_context_menu(
             submenu: Vec::new(),
         })
         .collect();
-
-    let _ = objects;
 
     vec![
         ContextMenuItem {
