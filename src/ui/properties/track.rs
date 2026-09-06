@@ -36,6 +36,30 @@ pub fn keyframe_track(
     segment_start: i32,
     segment_end: i32,
 ) -> TrackOutcome {
+    keyframe_track_colored(
+        ui,
+        id_source,
+        boundary_frames,
+        clip_start,
+        clip_end,
+        current_frame,
+        segment_start,
+        segment_end,
+        |_| None,
+    )
+}
+
+pub fn keyframe_track_colored(
+    ui: &mut egui::Ui,
+    id_source: impl std::hash::Hash + std::fmt::Debug,
+    boundary_frames: &[i32],
+    clip_start: i32,
+    clip_end: i32,
+    current_frame: i32,
+    segment_start: i32,
+    segment_end: i32,
+    marker_color: impl Fn(i32) -> Option<egui::Color32>,
+) -> TrackOutcome {
     let track_id = ui.make_persistent_id(id_source);
     let mut out = TrackOutcome::empty();
     let (rect, response) = ui.allocate_exact_size(
@@ -101,12 +125,11 @@ pub fn keyframe_track(
         } else {
             x_at(f)
         };
-        let color = if is_endpoint {
-            egui::Color32::from_rgb(0x6a, 0x6a, 0x76)
-        } else if is_dragged_point {
-            egui::Color32::from_rgb(0x8a, 0xab, 0xff)
-        } else {
-            egui::Color32::from_rgb(0x3a, 0x6d, 0xf0)
+        let color = match marker_color(f) {
+            Some(c) => c,
+            None if is_endpoint => egui::Color32::from_rgb(0x6a, 0x6a, 0x76),
+            None if is_dragged_point => egui::Color32::from_rgb(0x8a, 0xab, 0xff),
+            None => egui::Color32::from_rgb(0x3a, 0x6d, 0xf0),
         };
         painter.circle_filled(egui::pos2(px, rect.center().y), POINT_RADIUS, color);
         if dragging_origin.is_none() {

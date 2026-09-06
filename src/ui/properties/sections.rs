@@ -1,11 +1,12 @@
-use super::row::property_row;
+use super::row::{color_row, property_row};
 use super::segment::resolve_segment;
-use super::track::keyframe_track;
+use super::track::{keyframe_track, keyframe_track_colored};
 use crate::ecs::EcsWorld;
 use crate::ecs::components::ParamAccess;
 use crate::ecs::object_schema::{
-    AUDIO_SCHEMA, CLIP_TARGET_ENABLED_KEY, CLIP_TARGET_SCHEMA, GROUP_CONTROL_SCHEMA, SHAPE_SCHEMA,
-    TEXT_SCHEMA, TRANSFORM_SCHEMA, is_visible, resolve_range,
+    AUDIO_SCHEMA, CLIP_TARGET_ENABLED_KEY, CLIP_TARGET_SCHEMA, ColorParamSchema,
+    GROUP_CONTROL_SCHEMA, SHAPE_COLOR_SCHEMA, SHAPE_SCHEMA, TEXT_SCHEMA, TRANSFORM_SCHEMA,
+    is_visible, resolve_range,
 };
 use crate::localization::effect_param_label;
 use elegance::{Checkbox, Select, Slider, TextArea};
@@ -83,6 +84,141 @@ pub(super) fn float_row<S: std::hash::Hash + Copy + std::fmt::Debug>(
             let (e, p, v) = (k.engine_id.clone(), k.engine_payload.clone(), k.value);
             remove_kf(world, from);
             set_kf(world, to, v, e, p);
+        }
+    }
+}
+
+pub(super) struct ColorRowCtx<'a, S: std::hash::Hash + Copy + std::fmt::Debug> {
+    pub id_source: S,
+    pub object_id: usize,
+    pub keys: [&'static str; 4],
+    pub label: &'a str,
+    pub clip_start: i32,
+    pub clip_end: i32,
+    pub current_frame: i32,
+    pub base_value: [f32; 4],
+    pub track: [Vec<crate::ecs::types::Keyframe>; 4],
+    pub button_w: f32,
+}
+
+pub(super) fn color_row_ctx<S: std::hash::Hash + Copy + std::fmt::Debug>(
+    ui: &mut egui::Ui,
+    world: &mut EcsWorld,
+    ctx: ColorRowCtx<S>,
+) {
+    let ColorRowCtx {
+        id_source,
+        object_id,
+        keys,
+        label,
+        clip_start,
+        clip_end,
+        current_frame,
+        base_value,
+        track,
+        button_w,
+    } = ctx;
+
+    let segments: [super::segment::Segment; 4] = std::array::from_fn(|i| {
+        resolve_segment(
+            &track[i],
+            clip_start,
+            clip_end,
+            current_frame,
+            base_value[i],
+        )
+    });
+    let start_color = [
+        segments[0].start_value,
+        segments[1].start_value,
+        segments[2].start_value,
+        segments[3].start_value,
+    ];
+    let end_color = [
+        segments[0].end_value,
+        segments[1].end_value,
+        segments[2].end_value,
+        segments[3].end_value,
+    ];
+
+    let outcome = color_row(ui, id_source, label, start_color, end_color, button_w);
+    if outcome.label_clicked {
+        super::easing_editor::toggle(
+            super::easing_editor::TrackTarget::Object {
+                object_id,
+                key: keys[0].to_string(),
+            },
+            label,
+        );
+    }
+
+    if let Some(c) = outcome.start_color {
+        for i in 0..4 {
+            let (e, p) = engine_of(&track[i], segments[i].start_frame);
+            world.set_keyframe(object_id, keys[i], segments[i].start_frame, c[i], e, p);
+        }
+    }
+    if let Some(c) = outcome.end_color {
+        for i in 0..4 {
+            let (e, p) = engine_of(&track[i], segments[i].end_frame);
+            world.set_keyframe(object_id, keys[i], segments[i].end_frame, c[i], e, p);
+        }
+    }
+
+    let mut boundary_set = std::collections::BTreeSet::new();
+    for channel in &track {
+        for f in super::segment::boundary_frames(channel, clip_start, clip_end) {
+            boundary_set.insert(f);
+        }
+    }
+    let boundaries: Vec<i32> = boundary_set.into_iter().collect();
+
+    let marker_color = |f: i32| -> Option<egui::Color32> {
+        let ch = |i: usize| -> f32 {
+            track[i]
+                .iter()
+                .find(|k| k.frame == f)
+                .map(|k| k.value)
+                .unwrap_or(base_value[i])
+        };
+        Some(egui::Color32::from_rgba_unmultiplied(
+            (ch(0) * 255.0).round() as u8,
+            (ch(1) * 255.0).round() as u8,
+            (ch(2) * 255.0).round() as u8,
+            (ch(3) * 255.0).round() as u8,
+        ))
+    };
+
+    let t_outcome = keyframe_track_colored(
+        ui,
+        id_source,
+        &boundaries,
+        clip_start,
+        clip_end,
+        current_frame,
+        segments[0].start_frame,
+        segments[0].end_frame,
+        marker_color,
+    );
+
+    if let Some(f) = t_outcome.add_point {
+        for i in 0..4 {
+            let (e, p) = engine_of(&track[i], f);
+            world.set_keyframe(object_id, keys[i], f, base_value[i], e, p);
+        }
+    }
+    if let Some(f) = t_outcome.remove_point {
+        for key in keys {
+            world.remove_keyframe(object_id, key, f);
+        }
+    }
+    if let Some((from, to)) = t_outcome.drag_committed {
+        for i in 0..4 {
+            if let Some(k) = track[i].iter().find(|k| k.frame == from) {
+                let (e, p, v) = (k.engine_id.clone(), k.engine_payload.clone(), k.value);
+                world.remove_keyframe(object_id, keys[i], from);
+                world.set_keyframe(object_id, keys[i], to, v, e, p);
+            }
         }
     }
 }
@@ -288,7 +424,12 @@ pub fn shape_section(ui: &mut egui::Ui, world: &mut EcsWorld, id: usize) {
         SHAPE_SCHEMA
             .iter()
             .filter(|s| s.kind == ParamKind::Float)
-            .map(|s| effect_param_label(s.label)),
+            .map(|s| effect_param_label(s.label))
+            .chain(
+                SHAPE_COLOR_SCHEMA
+                    .iter()
+                    .map(|s| effect_param_label(s.label)),
+            ),
     );
     ui.separator();
     ui.colored_label(egui::Color32::from_rgb(0x8a, 0xab, 0xff), t!("図形"));
@@ -317,6 +458,27 @@ pub fn shape_section(ui: &mut egui::Ui, world: &mut EcsWorld, id: usize) {
             },
             |w, f, v, e, p| w.set_keyframe(id, schema.key, f, v, e, p),
             |w, f| w.remove_keyframe(id, schema.key, f),
+        );
+    }
+    for ColorParamSchema { keys, label } in SHAPE_COLOR_SCHEMA {
+        let base_value: [f32; 4] = std::array::from_fn(|i| shape.get_param(keys[i]).unwrap_or(0.0));
+        let track: [Vec<crate::ecs::types::Keyframe>; 4] =
+            std::array::from_fn(|i| world.get_keyframes(id, keys[i]));
+        color_row_ctx(
+            ui,
+            world,
+            ColorRowCtx {
+                id_source: (id, "shape_color", *label),
+                object_id: id,
+                keys: *keys,
+                label,
+                clip_start,
+                clip_end,
+                current_frame,
+                base_value,
+                track,
+                button_w,
+            },
         );
     }
 }

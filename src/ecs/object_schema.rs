@@ -128,11 +128,18 @@ pub const SHAPE_SCHEMA: &[ParamSchema] = &[
     float_fixed("sides", "辺の数", 3.0, 32.0),
     float_fixed("extrude_depth", "押し出し量", 0.0, 5.0),
     float_fixed("stroke_width", "線幅", 0.0, 50.0),
-    float_fixed("fill_r", "塗りR", 0.0, 1.0),
-    float_fixed("fill_g", "塗りG", 0.0, 1.0),
-    float_fixed("fill_b", "塗りB", 0.0, 1.0),
-    float_fixed("fill_a", "塗りA", 0.0, 1.0),
 ];
+
+#[derive(Clone, Copy, Debug)]
+pub struct ColorParamSchema {
+    pub keys: [&'static str; 4],
+    pub label: &'static str,
+}
+
+pub const SHAPE_COLOR_SCHEMA: &[ColorParamSchema] = &[ColorParamSchema {
+    keys: ["fill_r", "fill_g", "fill_b", "fill_a"],
+    label: "塗り",
+}];
 
 pub const AUDIO_SCHEMA: &[ParamSchema] = &[
     float_fixed("volume", "音量", 0.0, 2.0),

@@ -148,3 +148,107 @@ pub fn property_row(
     set_active(id, (left_active, right_active));
     out
 }
+
+pub struct ColorRowOutcome {
+    pub start_color: Option<[f32; 4]>,
+    pub end_color: Option<[f32; 4]>,
+    pub start_commit: bool,
+    pub start_release: bool,
+    pub end_commit: bool,
+    pub end_release: bool,
+    pub label_clicked: bool,
+}
+
+impl ColorRowOutcome {
+    fn empty() -> Self {
+        Self {
+            start_color: None,
+            end_color: None,
+            start_commit: false,
+            start_release: false,
+            end_commit: false,
+            end_release: false,
+            label_clicked: false,
+        }
+    }
+}
+
+pub fn color_row(
+    ui: &mut egui::Ui,
+    id_source: impl std::hash::Hash + std::fmt::Debug,
+    label: &str,
+    start_value: [f32; 4],
+    end_value: [f32; 4],
+    button_w: f32,
+) -> ColorRowOutcome {
+    let id = ui.make_persistent_id(id_source);
+    let (mut left_active, mut right_active) = take_active(id);
+    let mut out = ColorRowOutcome::empty();
+    let mut start_c = egui::Color32::from_rgba_unmultiplied(
+        (start_value[0] * 255.0).round() as u8,
+        (start_value[1] * 255.0).round() as u8,
+        (start_value[2] * 255.0).round() as u8,
+        (start_value[3] * 255.0).round() as u8,
+    );
+    let mut end_c = egui::Color32::from_rgba_unmultiplied(
+        (end_value[0] * 255.0).round() as u8,
+        (end_value[1] * 255.0).round() as u8,
+        (end_value[2] * 255.0).round() as u8,
+        (end_value[3] * 255.0).round() as u8,
+    );
+
+    const BOX_W: f32 = 70.0;
+
+    let theme = elegance::Theme::current(ui.ctx());
+    let row_height =
+        ButtonSize::Small.font_size(&theme) + 2.0 * ButtonSize::Small.padding(&theme).y;
+    let button_text = effect_param_label(label);
+
+    ui.horizontal(|ui| {
+        let picker_l = ui.add_sized(
+            [BOX_W, row_height],
+            elegance::ColorPicker::new(("color_row_l", id), &mut start_c),
+        );
+        if picker_l.changed() {
+            if !left_active {
+                left_active = true;
+                out.start_commit = true;
+            }
+            out.start_color = Some(start_c.to_normalized_gamma_f32());
+        }
+        if picker_l.drag_stopped() || picker_l.lost_focus() {
+            left_active = false;
+            out.start_release = true;
+        }
+
+        if ui
+            .add(
+                Button::new(button_text)
+                    .size(ButtonSize::Small)
+                    .min_width(button_w),
+            )
+            .clicked()
+        {
+            out.label_clicked = true;
+        }
+
+        let picker_r = ui.add_sized(
+            [BOX_W, row_height],
+            elegance::ColorPicker::new(("color_row_r", id), &mut end_c),
+        );
+        if picker_r.changed() {
+            if !right_active {
+                right_active = true;
+                out.end_commit = true;
+            }
+            out.end_color = Some(end_c.to_normalized_gamma_f32());
+        }
+        if picker_r.drag_stopped() || picker_r.lost_focus() {
+            right_active = false;
+            out.end_release = true;
+        }
+    });
+
+    set_active(id, (left_active, right_active));
+    out
+}
