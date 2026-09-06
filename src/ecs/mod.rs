@@ -1,6 +1,7 @@
 pub mod audio_plugins;
 pub mod components;
 pub mod effects;
+pub mod history;
 pub(crate) mod object_query_views;
 pub mod object_schema;
 pub mod resources;
