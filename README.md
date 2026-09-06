@@ -62,10 +62,12 @@ flowchart TB
 
     subgraph ECS["src/ecs/ — Entity Component System"]
         ECS_MOD["mod.rs / EcsWorld"]
-        ECS_COMP["components.rs"]
+        ECS_COMP["components/*<br/>hierarchy/clip_target/group_control/time_remap..."]
+        ECS_WORLD["world/*<br/>object_crud/hierarchy_ops/serialize/transform..."]
+        ECS_SYS["systems/*<br/>active_query/camera/curtain/effect_stack..."]
+        ECS_VIEWS["object_query_views.rs"]
         ECS_TYPES["types.rs"]
-        ECS_TRANSFORM["transform.rs"]
-        ECS_SYS["systems.rs"]
+        ECS_TRANSFORM["transform.rs<br/>Camera/Transform"]
         ECS_RES["resources.rs"]
         ECS_EFFECTS["effects.rs"]
         ECS_OBJSCHEMA["object_schema.rs"]
@@ -80,7 +82,8 @@ flowchart TB
     end
 
     subgraph RENDERER["src/renderer/ — GPUレンダリング"]
-        PIPELINE["pipeline.rs<br/>RenderEngine"]
+        PIPELINE["pipeline/*<br/>RenderEngine"]
+        EFFECT_FILTER["effect_filter.rs"]
         SLANG_SHADERS["slang/media*.slang"]
     end
 
@@ -123,8 +126,9 @@ flowchart TB
         MR_WAVE["waveform.rs"]
     end
 
-    subgraph MEDIABACK["crates/neo-media-*, media/* — デコーダ実装"]
+    subgraph MEDIABACK["crates/neo-media-*, media/* — デコーダ・変換実装"]
         FFMPEG_C["neo-media-ffmpeg<br/>decoder/encoder/vaapi"]
+        SWSCALE["neo-media-swscale<br/>Slang/WGSLスケール変換"]
         SYMPHONIA["media/symphonia-decoder"]
         IMGDEC["media/image-decoder"]
         MEDIA_CORE["neo-media-core"]
@@ -140,7 +144,7 @@ flowchart TB
         MH_BINPATH["binary_path.rs"]
     end
 
-    subgraph OBJECTS_SO["crates/objects/* — オブジェクト .so プラグイン"]
+    subgraph OBJECTS_SO["crates/objects/* — オブジェクト .so プラグイン(9種)"]
         OBJ_VIDEO["video"]
         OBJ_AUDIO["audio"]
         OBJ_IMAGE["image"]
@@ -148,9 +152,11 @@ flowchart TB
         OBJ_SHAPE["shape"]
         OBJ_SCENE["scene"]
         OBJ_GROUP["group_control"]
+        OBJ_CAMERA["camera"]
+        OBJ_LIGHT["light"]
     end
 
-    subgraph EFFECTS_SO["crates/effects/* — エフェクト .so プラグイン(28種)"]
+    subgraph EFFECTS_SO["crates/effects/* — エフェクト .so プラグイン(23種)"]
         EFF_LIST["transform / color_correction / mosaic<br/>motion_blur / lens_blur / radial_blur<br/>directional_blur / border_blur<br/>chromatic_aberration / diffuse_light<br/>drop_shadow / clipping / diagonal_clipping<br/>mask_shape / displacement_map_*<br/>image_loop / pixel_sorter / vibration<br/>text_outline"]
     end
 
@@ -192,10 +198,12 @@ flowchart TB
     EXPORT --> PIPELINE
 
     ECS_MOD --> ECS_COMP
+    ECS_MOD --> ECS_WORLD
     ECS_MOD --> ECS_SYS
     ECS_MOD --> ECS_RES
     ECS_SYS --> ECS_TRANSFORM
     ECS_SYS --> ECS_EFFECTS
+    ECS_SYS --> ECS_VIEWS
     ECS_EFFECTS --> EFFECT_LOADER
     ECS_OBJSCHEMA --> OBJ_LOADER
     ECS_AUDIOPLUG --> AUDIO_PLUGREG
@@ -228,6 +236,7 @@ flowchart TB
 
     PIPELINE --> SLANG_SHADERS
     PIPELINE --> GPUSHARED
+    PIPELINE --> EFFECT_FILTER
     PIPELINE --> RUNTIME
     PIPELINE --> MLT_API
 
@@ -240,6 +249,7 @@ flowchart TB
     MR_WAVE --> MEDIA_API
 
     FFMPEG_C --> MEDIA_CORE
+    SWSCALE --> MEDIA_CORE
     SYMPHONIA --> MEDIA_CORE
     IMGDEC --> MEDIA_CORE
     MEDIA_CORE --> MEDIA_CACHE

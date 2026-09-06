@@ -4,7 +4,7 @@ use crate::ecs::components::{
     TimeRemap,
 };
 use crate::ecs::resources::SceneMeta;
-use crate::ecs::transform::Transform;
+use crate::ecs::transform::{Camera, Transform};
 use crate::ecs::types::{EffectInstance, Keyframe};
 use neoutl_media_runtime::MediaKind;
 use std::collections::HashMap;
@@ -141,6 +141,7 @@ pub struct ObjectPayload {
     pub parent_id: Option<usize>,
     pub blend_mode: Option<BlendMode>,
     pub time_remap: Option<TimeRemapDoc>,
+    pub camera: Option<Camera>,
 }
 
 impl From<&ObjectPayload> for neoutl_schema::ObjectPayload {
@@ -215,6 +216,7 @@ impl TryFrom<&neoutl_schema::ObjectPayload> for ObjectPayload {
                 .as_ref()
                 .map(TimeRemapDoc::try_from)
                 .transpose()?,
+            camera: None,
         })
     }
 }

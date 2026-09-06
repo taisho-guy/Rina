@@ -44,7 +44,7 @@ fn downscale_plan_includes_scale_ops() {
         FilterKind::Lanczos3,
     );
     assert!(!is_identity(&plan));
-    assert_eq!(plan.ops.len(), 4);
+    assert_eq!(plan.ops.len(), 5);
 }
 
 #[test]

@@ -5,7 +5,7 @@ use crate::ecs::components::{
     TimeRemap,
 };
 use crate::ecs::effects::EffectStack;
-use crate::ecs::transform::Transform;
+use crate::ecs::transform::{Camera, Transform};
 use shipyard::{Borrow, BorrowInfo, View};
 
 #[derive(Borrow, BorrowInfo)]
@@ -30,4 +30,5 @@ pub(crate) struct ObjectQueryViews<'v> {
     pub(crate) parent_refs: View<'v, ParentRef>,
     pub(crate) blend_modes: View<'v, BlendMode>,
     pub(crate) time_remaps: View<'v, TimeRemap>,
+    pub(crate) cameras: View<'v, Camera>,
 }

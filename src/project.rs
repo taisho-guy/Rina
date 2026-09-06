@@ -125,7 +125,76 @@ fn read_file(dir: &Path) -> Option<neoutl_schema::DocumentModel> {
         meta_path(dir)
     };
     let bytes = std::fs::read(path).ok()?;
-    neoutl_schema::DocumentModel::decode(bytes.as_slice()).ok()
+    if let Ok(model) = neoutl_schema::DocumentModel::decode(bytes.as_slice()) {
+        return Some(model);
+    }
+    let val: serde_yaml::Value = serde_yaml::from_slice(&bytes).ok()?;
+    let project_name = val
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("project")
+        .to_string();
+    let audio_sample_rate = val
+        .get("audio_sample_rate")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(48000) as u32;
+    let audio_channels = val
+        .get("audio_channels")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(2) as u32;
+    let active_scene = val
+        .get("active_scene")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let next_object_id = val
+        .get("next_object_id")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1);
+    let mut scenes = Vec::new();
+    if let Some(scenes_val) = val.get("scenes").and_then(|v| v.as_sequence()) {
+        for s in scenes_val {
+            scenes.push(neoutl_schema::SceneMeta {
+                id: s.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+                name: s
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Scene")
+                    .to_string(),
+                width: s.get("width").and_then(|v| v.as_u64()).unwrap_or(1920) as u32,
+                height: s.get("height").and_then(|v| v.as_u64()).unwrap_or(1080) as u32,
+                fps: s.get("fps").and_then(|v| v.as_u64()).unwrap_or(30) as u32,
+                grid_mode: s.get("grid_mode").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+                grid_bpm: s.get("grid_bpm").and_then(|v| v.as_f64()).unwrap_or(120.0) as f32,
+                grid_offset: s.get("grid_offset").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32,
+                grid_interval: s
+                    .get("grid_interval")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(30) as i32,
+                grid_subdivision: s
+                    .get("grid_subdivision")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(1) as i32,
+                enable_snap: s
+                    .get("enable_snap")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+                magnetic_snap_range: s
+                    .get("magnetic_snap_range")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(5) as i32,
+            });
+        }
+    }
+    Some(neoutl_schema::DocumentModel {
+        schema_version: 1,
+        project_name,
+        audio_sample_rate,
+        audio_channels,
+        active_scene,
+        next_object_id,
+        scenes,
+        objects: Vec::new(),
+    })
 }
 
 pub fn load_project(dir: &Path) -> Option<ProjectMeta> {
@@ -317,13 +386,7 @@ mod tests {
             effects: Vec::new(),
             payload: ObjectPayload {
                 text: Some(TextContent::default()),
-                shape: None,
-                plugin_params: None,
-                media: None,
-                plugin_chain: None,
-                scene: None,
-                group_control: None,
-                clip_target: None,
+                ..Default::default()
             },
             keyframes: HashMap::new(),
         }
@@ -341,18 +404,13 @@ mod tests {
             audio: AudioParams::default(),
             effects: Vec::new(),
             payload: ObjectPayload {
-                text: None,
                 shape: Some(ShapeParams::default()),
-                plugin_params: None,
                 media: Some(MediaSourceDoc {
                     path: PathBuf::from("dummy.png"),
                     kind: MediaKind::Image,
                     trim_in_frame: 0,
                 }),
-                plugin_chain: None,
-                scene: None,
-                group_control: None,
-                clip_target: None,
+                ..Default::default()
             },
             keyframes: HashMap::new(),
         }

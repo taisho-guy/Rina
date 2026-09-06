@@ -14,11 +14,13 @@ pub use types::{ActiveObject, CapturedObjects, ComposeSource, FrameBufferKind};
 mod tests {
     use super::*;
     use crate::ecs::EcsWorld;
-    use crate::ecs::components::MediaSource;
+    use crate::ecs::components::{
+        ClipMode, ClipTarget, GroupControl, MediaSource, ShapeParams, TextContent,
+    };
     use crate::ecs::effects::EffectStack;
     use crate::ecs::types::{EffectInstance, EffectParam, Value};
     use neoutl_media_runtime::MediaKind;
-    use shipyard::ViewMut;
+    use shipyard::{Get, ViewMut};
     use std::path::PathBuf;
 
     const KIND_TEXT: u32 = 100;
@@ -235,11 +237,11 @@ mod tests {
             camera: None,
         };
         let gc_id = world.add_group_control_object(0, 30, KIND_GROUP_CONTROL, 0, gc);
-        world.set_layer(gc_id, 1);
-        let captured_child = world.add_object(0, 30, KIND_TEXT, 0, Some(TextContent::default()));
-        world.set_layer(captured_child, 0);
-        let out_of_span = world.add_object(0, 30, KIND_TEXT, -1, Some(TextContent::default()));
-        world.set_layer(out_of_span, -1);
+        world.set_layer(gc_id, 0);
+        let captured_child = world.add_object(0, 30, KIND_TEXT, 1, Some(TextContent::default()));
+        world.set_layer(captured_child, 1);
+        let out_of_span = world.add_object(0, 30, KIND_TEXT, 2, Some(TextContent::default()));
+        world.set_layer(out_of_span, 2);
         world.set_current_frame(0);
         let (active, captured) = get_active_objects_system(&world);
 
@@ -271,9 +273,9 @@ mod tests {
             camera: None,
         };
         let gc_id = world.add_group_control_object(0, 30, KIND_GROUP_CONTROL, 0, gc);
-        world.set_layer(gc_id, 1);
-        let captured_child = world.add_object(0, 30, KIND_TEXT, 0, Some(TextContent::default()));
-        world.set_layer(captured_child, 0);
+        world.set_layer(gc_id, 0);
+        let captured_child = world.add_object(0, 30, KIND_TEXT, 1, Some(TextContent::default()));
+        world.set_layer(captured_child, 1);
         world.set_current_frame(0);
         let (active, captured) = get_active_objects_system(&world);
 
@@ -298,9 +300,9 @@ mod tests {
             camera: None,
         };
         let gc_id = world.add_group_control_object(0, 30, KIND_GROUP_CONTROL, 0, gc);
-        world.set_layer(gc_id, 1);
-        let child = world.add_object(0, 30, KIND_TEXT, 0, Some(TextContent::default()));
-        world.set_layer(child, 0);
+        world.set_layer(gc_id, 0);
+        let child = world.add_object(0, 30, KIND_TEXT, 1, Some(TextContent::default()));
+        world.set_layer(child, 1);
         world.set_current_frame(0);
         let (active, captured) = get_active_objects_system(&world);
 
@@ -311,7 +313,7 @@ mod tests {
     #[test]
     fn clip_layer_span_excludes_out_of_range_layer() {
         let mut world = EcsWorld::new();
-        let cc_id = world.add_object(0, 30, KIND_SHAPE, 1, None);
+        let cc_id = world.add_object(0, 30, KIND_SHAPE, 0, None);
         world.set_clip_target(
             cc_id,
             ClipTarget {
@@ -321,11 +323,11 @@ mod tests {
                 ..ClipTarget::default()
             },
         );
-        world.set_layer(cc_id, 1);
-        let in_range = world.add_object(0, 30, KIND_TEXT, 0, Some(TextContent::default()));
-        world.set_layer(in_range, 0);
-        let out_of_range = world.add_object(0, 30, KIND_TEXT, -1, Some(TextContent::default()));
-        world.set_layer(out_of_range, -1);
+        world.set_layer(cc_id, 0);
+        let in_range = world.add_object(0, 30, KIND_TEXT, 1, Some(TextContent::default()));
+        world.set_layer(in_range, 1);
+        let out_of_range = world.add_object(0, 30, KIND_TEXT, 2, Some(TextContent::default()));
+        world.set_layer(out_of_range, 2);
         world.set_current_frame(0);
         let (active, captured) = get_active_objects_system(&world);
 
@@ -354,7 +356,7 @@ mod tests {
     #[test]
     fn clip_mode_luminance_invert_is_stored_in_active_object() {
         let mut world = EcsWorld::new();
-        let cc_id = world.add_object(0, 30, KIND_SHAPE, 1, None);
+        let cc_id = world.add_object(0, 30, KIND_SHAPE, 0, None);
         world.set_clip_target(
             cc_id,
             ClipTarget {
@@ -365,9 +367,9 @@ mod tests {
                 ..ClipTarget::default()
             },
         );
-        world.set_layer(cc_id, 1);
-        let child = world.add_object(0, 30, KIND_TEXT, 0, Some(TextContent::default()));
-        world.set_layer(child, 0);
+        world.set_layer(cc_id, 0);
+        let child = world.add_object(0, 30, KIND_TEXT, 1, Some(TextContent::default()));
+        world.set_layer(child, 1);
         world.set_current_frame(0);
         let (active, _captured) = get_active_objects_system(&world);
         let child_obj = active
@@ -384,15 +386,15 @@ mod tests {
     fn clip_and_group_curtains_resolve_independently() {
         let mut world = EcsWorld::new();
         let gc = GroupControl {
-            layer_count_down: 1,
+            layer_count_down: 2,
             layer_count_up: 0,
             generate_framebuffer: true,
             hide_captured: false,
             camera: None,
         };
         let gc_id = world.add_group_control_object(0, 30, KIND_GROUP_CONTROL, 0, gc);
-        world.set_layer(gc_id, 2);
-        let cc_id = world.add_object(0, 30, KIND_SHAPE, 0, None);
+        world.set_layer(gc_id, 0);
+        let cc_id = world.add_object(0, 30, KIND_SHAPE, 1, None);
         world.set_clip_target(
             cc_id,
             ClipTarget {
@@ -403,8 +405,8 @@ mod tests {
             },
         );
         world.set_layer(cc_id, 1);
-        let leaf = world.add_object(0, 30, KIND_TEXT, 0, Some(TextContent::default()));
-        world.set_layer(leaf, 0);
+        let leaf = world.add_object(0, 30, KIND_TEXT, 2, Some(TextContent::default()));
+        world.set_layer(leaf, 2);
         world.set_current_frame(0);
         let (active, captured) = get_active_objects_system(&world);
 
@@ -428,5 +430,211 @@ mod tests {
             leaf_instances, 1,
             "統一controllers解決によりleafは1回のみ描画対象化"
         );
+    }
+
+    static DUMMY_CAMERA_META: neoutl_object_api::ObjectMeta = neoutl_object_api::ObjectMeta {
+        stable_id: neoutl_object_api::CAMERA_STABLE_ID,
+        name: "Camera",
+        dimensionality: neoutl_object_api::Dimensionality::ThreeD,
+        property_groups: neoutl_object_api::FfiSlice::from_static(&[]),
+    };
+
+    static DUMMY_LIGHT_META: neoutl_object_api::ObjectMeta = neoutl_object_api::ObjectMeta {
+        stable_id: neoutl_object_api::LIGHT_STABLE_ID,
+        name: "Light",
+        dimensionality: neoutl_object_api::Dimensionality::ThreeD,
+        property_groups: neoutl_object_api::FfiSlice::from_static(&[]),
+    };
+
+    unsafe extern "C" fn dummy_camera_meta() -> *const neoutl_object_api::ObjectMeta {
+        &raw const DUMMY_CAMERA_META
+    }
+
+    unsafe extern "C" fn dummy_light_meta() -> *const neoutl_object_api::ObjectMeta {
+        &raw const DUMMY_LIGHT_META
+    }
+
+    unsafe extern "C" fn dummy_vertex_count() -> u32 {
+        0
+    }
+
+    unsafe extern "C" fn dummy_wgsl() -> neoutl_object_api::WgslSource {
+        neoutl_object_api::WgslSource {
+            ptr: std::ptr::null(),
+            len: 0,
+        }
+    }
+
+    unsafe extern "C" fn dummy_render(_ctx: *const neoutl_object_api::RenderContext) {}
+
+    static DUMMY_CAMERA_VTABLE: neoutl_object_api::ObjectVTable = neoutl_object_api::ObjectVTable {
+        meta: dummy_camera_meta,
+        vertex_count: dummy_vertex_count,
+        wgsl: dummy_wgsl,
+        render: dummy_render,
+        read_ref_layer: None,
+    };
+
+    static DUMMY_LIGHT_VTABLE: neoutl_object_api::ObjectVTable = neoutl_object_api::ObjectVTable {
+        meta: dummy_light_meta,
+        vertex_count: dummy_vertex_count,
+        wgsl: dummy_wgsl,
+        render: dummy_render,
+        read_ref_layer: None,
+    };
+
+    fn setup_camera_kind() -> u32 {
+        crate::objects::loader::register_static(
+            neoutl_object_api::CAMERA_STABLE_ID,
+            "Camera",
+            &DUMMY_CAMERA_VTABLE,
+        )
+    }
+
+    fn setup_light_kind() -> u32 {
+        crate::objects::loader::register_static(
+            neoutl_object_api::LIGHT_STABLE_ID,
+            "Light",
+            &DUMMY_LIGHT_VTABLE,
+        )
+    }
+
+    #[test]
+    fn camera_independent_object_resolves_view_and_is_not_rendered() {
+        let mut world = EcsWorld::new();
+        let camera_kind = setup_camera_kind();
+
+        let mut custom_camera = crate::ecs::transform::Camera::for_resolution(1920.0, 1080.0);
+        custom_camera.pos_z = 2000.0;
+        custom_camera.fov_deg = 30.0;
+        let cam_id = world.add_camera_object(0, 60, camera_kind, 0, custom_camera);
+        world.set_layer(cam_id, 0);
+
+        let child_id = world.add_object(0, 60, KIND_TEXT, 1, Some(TextContent::default()));
+        world.set_layer(child_id, 1);
+
+        world.set_current_frame(0);
+        let (active, _captured) = get_active_objects_system(&world);
+
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].clip_instance, child_id as u64);
+
+        let default_cam = crate::ecs::transform::Camera::for_resolution(1920.0, 1080.0);
+        let default_mvp = crate::ecs::transform::compute_mvp(
+            &crate::ecs::transform::compute_global_matrix(
+                &crate::ecs::transform::Transform::default(),
+            ),
+            &default_cam,
+            1920.0,
+            1080.0,
+            crate::ecs::transform::Projection::Perspective {
+                fov_deg: default_cam.fov_deg,
+            },
+        );
+        assert_ne!(active[0].mvp, default_mvp);
+    }
+
+    #[test]
+    fn multi_camera_scene_switching_across_timeline() {
+        let mut world = EcsWorld::new();
+        let camera_kind = setup_camera_kind();
+
+        let mut cam1 = crate::ecs::transform::Camera::for_resolution(1920.0, 1080.0);
+        cam1.pos_z = 500.0;
+        let cam1_id = world.add_camera_object(0, 30, camera_kind, 0, cam1);
+        world.set_layer(cam1_id, 0);
+
+        let mut cam2 = crate::ecs::transform::Camera::for_resolution(1920.0, 1080.0);
+        cam2.pos_z = 2500.0;
+        let cam2_id = world.add_camera_object(30, 30, camera_kind, 0, cam2);
+        world.set_layer(cam2_id, 0);
+
+        let child_id = world.add_object(0, 60, KIND_TEXT, 1, Some(TextContent::default()));
+        world.set_layer(child_id, 1);
+
+        world.set_current_frame(10);
+        let (active_at_10, _) = get_active_objects_system(&world);
+        assert_eq!(active_at_10.len(), 1);
+        let mvp_10 = active_at_10[0].mvp;
+
+        world.set_current_frame(45);
+        let (active_at_45, _) = get_active_objects_system(&world);
+        assert_eq!(active_at_45.len(), 1);
+        let mvp_45 = active_at_45[0].mvp;
+
+        assert_ne!(mvp_10, mvp_45);
+    }
+
+    #[test]
+    fn multi_camera_layer_priority_selects_top_layer() {
+        let mut world = EcsWorld::new();
+        let camera_kind = setup_camera_kind();
+
+        let mut cam_top = crate::ecs::transform::Camera::for_resolution(1920.0, 1080.0);
+        cam_top.fov_deg = 30.0;
+        let cam_top_id = world.add_camera_object(0, 60, camera_kind, 0, cam_top);
+        world.set_layer(cam_top_id, 0);
+
+        let mut cam_bottom = crate::ecs::transform::Camera::for_resolution(1920.0, 1080.0);
+        cam_bottom.fov_deg = 90.0;
+        let cam_bottom_id = world.add_camera_object(0, 60, camera_kind, 1, cam_bottom);
+        world.set_layer(cam_bottom_id, 1);
+
+        let child_id = world.add_object(0, 60, KIND_TEXT, 2, Some(TextContent::default()));
+        world.set_layer(child_id, 2);
+
+        world.set_current_frame(0);
+        let (active, _) = get_active_objects_system(&world);
+        assert_eq!(active.len(), 1);
+
+        let top_mvp = crate::ecs::transform::compute_mvp(
+            &crate::ecs::transform::compute_global_matrix(
+                &crate::ecs::transform::Transform::default(),
+            ),
+            &cam_top,
+            1920.0,
+            1080.0,
+            crate::ecs::transform::Projection::Perspective {
+                fov_deg: cam_top.fov_deg,
+            },
+        );
+        assert_eq!(active[0].mvp, top_mvp);
+    }
+
+    #[test]
+    fn light_independent_object_is_excluded_from_active() {
+        let mut world = EcsWorld::new();
+        let light_kind = setup_light_kind();
+
+        let light_id = world.add_light_object(0, 60, light_kind, 0);
+        world.set_layer(light_id, 0);
+
+        let child_id = world.add_object(0, 60, KIND_TEXT, 1, Some(TextContent::default()));
+        world.set_layer(child_id, 1);
+
+        world.set_current_frame(0);
+        let (active, _) = get_active_objects_system(&world);
+
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].clip_instance, child_id as u64);
+    }
+
+    #[test]
+    fn camera_params_get_set() {
+        let mut world = EcsWorld::new();
+        let camera_kind =
+            crate::objects::loader::ensure_kind_id(neoutl_object_api::CAMERA_STABLE_ID);
+        let cam = crate::ecs::transform::Camera::for_resolution(1920.0, 1080.0);
+        let cam_id = world.add_camera_object(0, 60, camera_kind, 0, cam);
+
+        let retrieved = world.get_camera_params(cam_id);
+        assert_eq!(retrieved, Some(cam));
+
+        let mut updated = cam;
+        updated.fov_deg = 75.0;
+        world.set_camera_params(cam_id, updated);
+
+        let retrieved_updated = world.get_camera_params(cam_id);
+        assert_eq!(retrieved_updated, Some(updated));
     }
 }

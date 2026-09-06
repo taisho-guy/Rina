@@ -142,6 +142,8 @@ fn make_active_object(
         compose_source: None,
         layer: 0,
         clip_target: None,
+        zbuffer_depth: None,
+        blend_mode: crate::ecs::components::BlendMode::default(),
     }
 }
 

@@ -3297,6 +3297,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "neoutl-object-camera"
+version = "0.0.0"
+dependencies = [
+ "neoutl-object-api",
+]
+
+[[package]]
 name = "neoutl-object-group-control"
 version = "0.0.0"
 dependencies = [
@@ -3305,6 +3312,13 @@ dependencies = [
 
 [[package]]
 name = "neoutl-object-image"
+version = "0.0.0"
+dependencies = [
+ "neoutl-object-api",
+]
+
+[[package]]
+name = "neoutl-object-light"
 version = "0.0.0"
 dependencies = [
  "neoutl-object-api",

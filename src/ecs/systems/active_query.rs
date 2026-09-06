@@ -1,5 +1,5 @@
 use super::EcsWorld;
-use super::camera::{projection_for, resolve_camera, zbuffer_sort_key};
+use super::camera::{ActiveCameraCandidate, projection_for, resolve_camera, zbuffer_sort_key};
 use super::curtain::{ControllerKind, CurtainInfo, group_only, resolve_group_chain};
 use super::types::{ActiveObject, CapturedObjects, ClipTargetInfo, ComposeSource, FrameBufferKind};
 use crate::ecs::components::{
@@ -45,7 +45,17 @@ type PayloadGroupViews<'v> = (
     View<'v, EffectStack>,
     View<'v, GroupControl>,
 );
-type TimingGroupViews<'v> = (View<'v, TimeRemap>, View<'v, BlendMode>);
+type TimingGroupViews<'v> = (View<'v, TimeRemap>, View<'v, BlendMode>, View<'v, Camera>);
+
+pub(crate) fn is_camera_kind(kind_id: u32) -> bool {
+    crate::objects::loader::by_kind_id(kind_id)
+        .is_some_and(|p| p.stable_id == neoutl_object_api::CAMERA_STABLE_ID)
+}
+
+pub(crate) fn is_light_kind(kind_id: u32) -> bool {
+    crate::objects::loader::by_kind_id(kind_id)
+        .is_some_and(|p| p.stable_id == neoutl_object_api::LIGHT_STABLE_ID)
+}
 
 pub(crate) fn is_active_at(
     range: &TimeRange,
@@ -88,7 +98,7 @@ pub fn get_active_objects_system_at(
             effect_stacks,
             group_controls,
         ): PayloadGroupViews,
-         (time_remaps, blend_modes): TimingGroupViews| {
+         (time_remaps, blend_modes, cameras_view): TimingGroupViews| {
             let project_width = project.width.max(1) as f32;
             let project_height = project.height.max(1) as f32;
             let max_depth = system_settings.max_group_chain_depth;
@@ -181,6 +191,36 @@ pub fn get_active_objects_system_at(
                 layer_positions.insert(layer.0, (transform.x, transform.y, transform.z));
             }
 
+            let mut active_cameras: Vec<ActiveCameraCandidate> = Vec::new();
+            for (id, (range, kind, scene, layer)) in
+                (&time_ranges, &kind_ids, &scene_ids, &layers).iter().with_id()
+            {
+                if !is_active_at(range, scene, active_scene, current) {
+                    continue;
+                }
+                if is_camera_kind(kind.0) {
+                    let mut cam = cameras_view
+                        .get(id)
+                        .ok()
+                        .copied()
+                        .unwrap_or_else(|| Camera::for_resolution(project_width, project_height));
+                    if let Ok(transform) = transforms.get(id) {
+                        let mut t = *transform;
+                        if let Ok(kt) = keyframe_tracks.get(id) {
+                            kt.apply(&mut t, current);
+                        }
+                        cam.pos_x += t.x;
+                        cam.pos_y += t.y;
+                        cam.pos_z += t.z;
+                    }
+                    active_cameras.push(ActiveCameraCandidate {
+                        layer: layer.0,
+                        camera: cam,
+                    });
+                }
+            }
+            active_cameras.sort_by_key(|c| c.layer);
+
             let mut active = Vec::new();
             let mut captured: CapturedObjects = HashMap::new();
 
@@ -193,6 +233,9 @@ pub fn get_active_objects_system_at(
                     continue;
                 }
                 if clip_targets.get(id).is_ok_and(|t| t.enabled) {
+                    continue;
+                }
+                if is_camera_kind(kind.0) || is_light_kind(kind.0) {
                     continue;
                 }
                 let keyframes = keyframe_tracks.get(id).ok();
@@ -268,7 +311,7 @@ pub fn get_active_objects_system_at(
                     group_idx.iter().map(|&i| controllers[i].matrix).collect();
                 let matrix = compute_chained_matrix(&chain_matrices, &local_matrix);
 
-                let active_camera = resolve_camera(&chain_idx, &controllers, &layer_positions);
+                let active_camera = resolve_camera(&active_cameras, &chain_idx, &controllers, &layer_positions);
                 let effective_camera = active_camera.map_or(*camera, |(_, c)| c);
                 let mvp = compute_mvp(
                     &matrix,
@@ -351,7 +394,7 @@ pub fn get_active_objects_system_at(
                         .map(|&i| controllers[i].matrix)
                         .collect();
                     let inner_matrix = compute_chained_matrix(&inner_matrices, &local_matrix);
-                    let inner_camera = resolve_camera(inner_chain, &controllers, &layer_positions);
+                    let inner_camera = resolve_camera(&active_cameras, inner_chain, &controllers, &layer_positions);
                     let inner_effective_camera = inner_camera.map_or(*camera, |(_, c)| c);
                     let inner_mvp = compute_mvp(
                         &inner_matrix,
@@ -422,7 +465,7 @@ pub fn get_active_objects_system_at(
                         let stationary_matrix =
                             compute_chained_matrix(&stationary_matrices, &local_matrix);
                         let stationary_camera =
-                            resolve_camera(&stationary_chain, &controllers, &layer_positions);
+                            resolve_camera(&active_cameras, &stationary_chain, &controllers, &layer_positions);
                         let stationary_effective_camera =
                             stationary_camera.map_or(*camera, |(_, c)| c);
                         let stationary_mvp = compute_mvp(
@@ -484,7 +527,7 @@ pub fn get_active_objects_system_at(
                     }
                 };
                 let matrix = compute_chained_matrix(&chain_matrices, &own_matrix);
-                let self_camera = resolve_camera(&chain_idx, &controllers, &layer_positions);
+                let self_camera = resolve_camera(&active_cameras, &chain_idx, &controllers, &layer_positions);
                 let self_effective_camera = self_camera.map_or(*camera, |(_, cam)| cam);
                 let mvp = compute_mvp(
                     &matrix,

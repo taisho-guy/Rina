@@ -225,7 +225,7 @@ pub enum TargetLayerMode {
     Layer(i32),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Unique)]
+#[derive(Clone, Copy, Debug, PartialEq, Component, Unique)]
 pub struct Camera {
     pub pos_x: f32,
     pub pos_y: f32,

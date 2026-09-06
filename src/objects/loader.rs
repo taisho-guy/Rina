@@ -14,7 +14,7 @@ pub struct ObjectPlugin {
     pub name: String,
     pub kind_id: u32,
     pub vtable: &'static ObjectVTable,
-    _lib: Library,
+    _lib: Option<Library>,
 }
 
 fn registry_swap() -> &'static ArcSwap<Vec<Arc<ObjectPlugin>>> {
@@ -27,6 +27,11 @@ fn kind_id_table() -> &'static Mutex<(HashMap<String, u32>, u32)> {
     TABLE.get_or_init(|| Mutex::new((HashMap::new(), 0)))
 }
 
+#[allow(dead_code)]
+pub fn ensure_kind_id(stable_id: &str) -> u32 {
+    assign_kind_id(stable_id)
+}
+
 fn assign_kind_id(stable_id: &str) -> u32 {
     let mut guard = kind_id_table().lock().expect("kind_id_table poisoned");
     if let Some(existing) = guard.0.get(stable_id) {
@@ -36,6 +41,28 @@ fn assign_kind_id(stable_id: &str) -> u32 {
     guard.1 = guard.1.checked_add(1).expect("kind_id空間枯渇");
     guard.0.insert(stable_id.to_owned(), next);
     next
+}
+
+#[allow(dead_code)]
+pub fn register_static(stable_id: &str, name: &str, vtable: &'static ObjectVTable) -> u32 {
+    let kind_id = assign_kind_id(stable_id);
+    let plugin = Arc::new(ObjectPlugin {
+        stable_id: stable_id.to_owned(),
+        name: name.to_owned(),
+        kind_id,
+        vtable,
+        _lib: None,
+    });
+    let current = registry_swap().load_full();
+    let mut next = (*current).clone();
+    if let Some(pos) = next.iter().position(|p| p.stable_id == stable_id) {
+        next[pos] = plugin;
+    } else {
+        next.push(plugin);
+        next.sort_by(|a, b| a.stable_id.cmp(&b.stable_id));
+    }
+    registry_swap().store(Arc::new(next));
+    kind_id
 }
 
 pub fn load_all(objects_dir: &Path) {
@@ -187,7 +214,7 @@ fn load_one(path: &Path) -> Result<ObjectPlugin, PluginError> {
         name: meta.name.to_owned(),
         kind_id: 0,
         vtable,
-        _lib: lib,
+        _lib: Some(lib),
     })
 }
 

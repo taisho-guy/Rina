@@ -11,7 +11,7 @@ use crate::ecs::effects::EffectStack;
 use crate::ecs::object_query_views::ObjectQueryViews;
 use crate::ecs::resolve_stable_id;
 use crate::ecs::resources::{SceneResource, TimelineResource};
-use crate::ecs::transform::{GlobalMatrix, Transform};
+use crate::ecs::transform::{Camera, GlobalMatrix, Transform};
 use shipyard::{Get, IntoIter, UniqueView, UniqueViewMut, View, ViewMut};
 use std::collections::HashMap;
 
@@ -126,6 +126,56 @@ impl EcsWorld {
         }
         self.touch();
         id
+    }
+
+    #[allow(dead_code)]
+    pub fn add_camera_object(
+        &mut self,
+        start: i32,
+        duration: i32,
+        kind_id: u32,
+        layer: i32,
+        camera: Camera,
+    ) -> usize {
+        let id = self.add_object(start, duration, kind_id, layer, None);
+        if let Some(entity) = self.find_entity(id) {
+            self.world.add_component(entity, camera);
+        }
+        self.touch();
+        id
+    }
+
+    #[allow(dead_code)]
+    pub fn add_light_object(
+        &mut self,
+        start: i32,
+        duration: i32,
+        kind_id: u32,
+        layer: i32,
+    ) -> usize {
+        let id = self.add_object(start, duration, kind_id, layer, None);
+        self.touch();
+        id
+    }
+
+    #[allow(dead_code)]
+    pub fn set_camera_params(&mut self, object_id: usize, camera: Camera) {
+        let Some(entity) = self.find_entity(object_id) else {
+            return;
+        };
+        self.world.run(|mut cameras: ViewMut<Camera>| {
+            if let Ok(mut slot) = (&mut cameras).get(entity) {
+                *slot = camera;
+            }
+        });
+        self.touch();
+    }
+
+    #[allow(dead_code)]
+    pub fn get_camera_params(&self, object_id: usize) -> Option<Camera> {
+        let entity = self.find_entity(object_id)?;
+        self.world
+            .run(|cameras: View<Camera>| cameras.get(entity).copied().ok())
     }
 
     pub fn set_group_control(&mut self, object_id: usize, gc: GroupControl) {
@@ -297,6 +347,11 @@ impl EcsWorld {
         if let Some(remap) = &o.payload.time_remap {
             self.world.add_component(entity, TimeRemap::from(remap));
         }
+        if let Some(cam) = o.payload.camera {
+            self.world.add_component(entity, cam);
+        } else if o.kind_stable_id == neoutl_object_api::CAMERA_STABLE_ID {
+            self.world.add_component(entity, Camera::default());
+        }
         if !o.keyframes.is_empty() {
             self.world
                 .add_component(entity, KeyframeTracks(o.keyframes.clone()));
@@ -360,6 +415,7 @@ impl EcsWorld {
                         parent_id: views.parent_refs.get(entity).ok().map(|p| p.0),
                         blend_mode: views.blend_modes.get(entity).ok().copied(),
                         time_remap: views.time_remaps.get(entity).ok().map(TimeRemapDoc::from),
+                        camera: views.cameras.get(entity).ok().copied(),
                     },
                 });
             }

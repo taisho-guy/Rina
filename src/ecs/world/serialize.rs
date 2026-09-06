@@ -60,6 +60,7 @@ impl EcsWorld {
                             .get(entity)
                             .ok()
                             .map(crate::document::TimeRemapDoc::from),
+                        camera: views.cameras.get(entity).ok().copied(),
                     },
                 });
             }

@@ -268,13 +268,7 @@ mod tests {
                 effects: Vec::new(),
                 payload: ObjectPayload {
                     text: Some(TextContent::default()),
-                    shape: None,
-                    plugin_params: None,
-                    media: None,
-                    plugin_chain: None,
-                    scene: None,
-                    group_control: None,
-                    clip_target: None,
+                    ..Default::default()
                 },
                 keyframes: HashMap::new(),
             }],
