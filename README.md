@@ -4,15 +4,13 @@
 
 ## NeoUtlとは
 
-AviUtl ExEdit0 ライクな動画編集ソフトウェアです。LinuxやWindowsで動作します。macOSも将来的にサポートする予定です。
+AviUtl ExEdit0ライクな動画編集ソフトウェアです。LinuxやWindowsで動作します。macOSも将来的にサポートする予定です。
 
 <img src="assets/screenshot.webp"/>
 
-## 開発状況
+## ロードマップ
 
-開発状況は[NeoUtlのお部屋](https://neoutl.taisho-guy.org)でご覧下さい。
-
-ロードマップは[TODO.md](https://codeberg.org/taisho-guy/NeoUtl/src/branch/main/TODO.md)でご覧下さい。
+[TODO.md](https://codeberg.org/taisho-guy/NeoUtl/src/branch/main/TODO.md)をご確認下さい。
 
 ## ダウンロード方法
 
@@ -20,7 +18,7 @@ AviUtl ExEdit0 ライクな動画編集ソフトウェアです。LinuxやWindow
 
 ## ビルド方法
 
-`CONTRIBUTING.md`をご確認下さい。
+[CONTRIBUTING.md](https://codeberg.org/taisho-guy/NeoUtl/src/branch/main/CONTRIBUTING.md)をご確認下さい。
 
 ## 採用技術
 
