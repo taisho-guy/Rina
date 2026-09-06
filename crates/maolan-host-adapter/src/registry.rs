@@ -1,12 +1,14 @@
 use crate::binary_path::default_binary_path;
 use crate::types::{PluginCatalogEntry, PluginFormat};
+use maolan_plugin_host::blocklist::{Blocklist, BlocklistEntry};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 const SCAN_TIMEOUT: Duration = Duration::from_secs(20);
+const VST3_CRASH_RETRY_LIMIT: u32 = 32;
 
 struct ScanCache {
     clap: Option<Vec<PluginCatalogEntry>>,
@@ -107,33 +109,108 @@ fn scan_system(format_tag: &str) -> Vec<PluginCatalogEntry> {
     }
 }
 
-fn run_scan_process(format_tag: &str) -> Option<String> {
+fn blocklist_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("maolan")
+        .join("plugin-blocklist.json")
+}
+
+fn unix_timestamp() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs().to_string())
+        .unwrap_or_default()
+}
+
+fn block_vst3_bundle(bundle_path: &str, error: &str) {
+    let path = blocklist_path();
+    let mut list = Blocklist::load_from(&path);
+    if list.is_blocked(bundle_path) {
+        return;
+    }
+    list.entries.push(BlocklistEntry {
+        path: bundle_path.to_string(),
+        error: error.to_string(),
+        timestamp: unix_timestamp(),
+    });
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    match serde_json::to_string_pretty(&list) {
+        Ok(json) => {
+            if let Err(e) = std::fs::write(&path, json) {
+                eprintln!(
+                    "[maolan-host-adapter] ブロックリスト書込失敗 path={}: {e}",
+                    path.display()
+                );
+            }
+        }
+        Err(e) => {
+            eprintln!("[maolan-host-adapter] ブロックリスト直列化失敗: {e}");
+        }
+    }
+}
+
+fn last_scanning_vst3_bundle(stderr: &str) -> Option<String> {
+    const MARKER: &str = "scanning VST3 plugin bundle: ";
+    let start = stderr.rfind(MARKER)? + MARKER.len();
+    let rest = &stderr[start..];
+    let end = rest.find('\n').unwrap_or(rest.len());
+    let path = rest[..end].trim();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path.to_string())
+    }
+}
+
+fn run_scan_process_ex(
+    format_tag: &str,
+    extra_args: &[&str],
+    capture_stderr: bool,
+) -> (Option<String>, Option<ExitStatus>, String) {
     let out_path = scan_output_path(format_tag);
     let _ = std::fs::remove_file(&out_path);
 
     eprintln!("[maolan-host-adapter] プラグイン走査開始 format={format_tag} path=--system");
 
-    let mut child = match Command::new(default_binary_path())
-        .arg("--scan")
+    let mut cmd = Command::new(default_binary_path());
+    cmd.arg("--scan")
         .arg("--format")
         .arg(format_tag)
         .arg("--path")
         .arg("--system")
         .arg("--output")
-        .arg(&out_path)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .spawn()
-    {
+        .arg(&out_path);
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
+    cmd.stdin(Stdio::null()).stdout(Stdio::null());
+    cmd.stderr(if capture_stderr {
+        Stdio::piped()
+    } else {
+        Stdio::inherit()
+    });
+
+    let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
             eprintln!(
                 "[maolan-host-adapter] プラグイン走査プロセス起動失敗 format={format_tag}: {e}"
             );
-            return None;
+            return (None, None, String::new());
         }
     };
+
+    let stderr_reader = child.stderr.take().map(|mut pipe| {
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut buf = String::new();
+            let _ = pipe.read_to_string(&mut buf);
+            buf
+        })
+    });
 
     let deadline = Instant::now() + SCAN_TIMEOUT;
     let final_status = loop {
@@ -161,6 +238,14 @@ fn run_scan_process(format_tag: &str) -> Option<String> {
         }
     };
 
+    let captured_stderr = stderr_reader
+        .and_then(|handle| handle.join().ok())
+        .unwrap_or_default();
+    if !capture_stderr {
+    } else {
+        eprint!("{captured_stderr}");
+    }
+
     let result = match final_status {
         Some(status) if status.success() => {
             eprintln!("[maolan-host-adapter] プラグイン走査完了 format={format_tag}");
@@ -176,7 +261,11 @@ fn run_scan_process(format_tag: &str) -> Option<String> {
     };
 
     let _ = std::fs::remove_file(&out_path);
-    result
+    (result, final_status, captured_stderr)
+}
+
+fn run_scan_process(format_tag: &str) -> Option<String> {
+    run_scan_process_ex(format_tag, &[], false).0
 }
 
 fn scan_clap_system() -> Vec<PluginCatalogEntry> {
@@ -200,25 +289,59 @@ fn scan_clap_system() -> Vec<PluginCatalogEntry> {
         .collect()
 }
 
+fn parse_vst3_scan_json(json: &str) -> Option<Vec<PluginCatalogEntry>> {
+    let parsed = serde_json::from_str::<ScanOutput<Vec<ScanVst3Entry>>>(json).ok()?;
+    Some(
+        parsed
+            .data
+            .into_iter()
+            .map(|p| PluginCatalogEntry {
+                format: PluginFormat::Vst3,
+                name: p.name,
+                vendor: p.vendor,
+                plugin_id: p.id,
+                path: PathBuf::from(p.path),
+            })
+            .collect(),
+    )
+}
+
 fn scan_vst3_system() -> Vec<PluginCatalogEntry> {
-    let Some(json) = run_scan_process("vst3") else {
-        return Vec::new();
-    };
-    let Ok(parsed) = serde_json::from_str::<ScanOutput<Vec<ScanVst3Entry>>>(&json) else {
-        eprintln!("[maolan-host-adapter] プラグイン走査結果解析失敗 format=vst3");
-        return Vec::new();
-    };
-    parsed
-        .data
-        .into_iter()
-        .map(|p| PluginCatalogEntry {
-            format: PluginFormat::Vst3,
-            name: p.name,
-            vendor: p.vendor,
-            plugin_id: p.id,
-            path: PathBuf::from(p.path),
-        })
-        .collect()
+    for attempt in 1..=VST3_CRASH_RETRY_LIMIT {
+        let (json, status, stderr) = run_scan_process_ex("vst3", &["--log-level", "debug"], true);
+
+        if let Some(json) = json {
+            let Some(entries) = parse_vst3_scan_json(&json) else {
+                eprintln!("[maolan-host-adapter] プラグイン走査結果解析失敗 format=vst3");
+                return Vec::new();
+            };
+            return entries;
+        }
+
+        let Some(status) = status else {
+            return Vec::new();
+        };
+        if status.success() {
+            return Vec::new();
+        }
+
+        let Some(crash_path) = last_scanning_vst3_bundle(&stderr) else {
+            eprintln!(
+                "[maolan-host-adapter] VST3走査クラッシュ原因バンドル特定失敗 status={status:?} attempt={attempt}"
+            );
+            return Vec::new();
+        };
+
+        eprintln!(
+            "[maolan-host-adapter] VST3プラグインクラッシュ検出 path={crash_path} status={status:?} attempt={attempt} ブロックリスト追加後再試行"
+        );
+        block_vst3_bundle(&crash_path, &format!("scan crash status={status:?}"));
+    }
+
+    eprintln!(
+        "[maolan-host-adapter] VST3走査再試行上限到達 limit={VST3_CRASH_RETRY_LIMIT} 走査中断"
+    );
+    Vec::new()
 }
 
 #[cfg(unix)]
