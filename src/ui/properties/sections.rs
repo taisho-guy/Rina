@@ -47,7 +47,16 @@ pub(super) fn float_row<S: std::hash::Hash + Copy + std::fmt::Debug>(
         button_w,
     } = ctx;
     let segment = resolve_segment(track, clip_start, clip_end, current_frame, base_value);
-    let outcome = property_row(ui, id_source, label, segment, min, max, button_w);
+    let outcome = property_row(
+        ui,
+        id_source,
+        label,
+        segment,
+        min,
+        max,
+        button_w,
+        !track.is_empty(),
+    );
     if outcome.label_clicked {
         super::easing_editor::toggle(target, label);
     }
@@ -71,6 +80,7 @@ pub(super) fn float_row<S: std::hash::Hash + Copy + std::fmt::Debug>(
         current_frame,
         segment.start_frame,
         segment.end_frame,
+        |f| track.iter().any(|k| k.frame == f),
     );
     if let Some(f) = t_outcome.add_point {
         let (e, p) = engine_of(track, f);
@@ -141,7 +151,15 @@ pub(super) fn color_row_ctx<S: std::hash::Hash + Copy + std::fmt::Debug>(
         segments[3].end_value,
     ];
 
-    let outcome = color_row(ui, id_source, label, start_color, end_color, button_w);
+    let outcome = color_row(
+        ui,
+        id_source,
+        label,
+        start_color,
+        end_color,
+        button_w,
+        track.iter().any(|channel| !channel.is_empty()),
+    );
     if outcome.label_clicked {
         super::easing_editor::toggle(
             super::easing_editor::TrackTarget::Object {
@@ -199,6 +217,11 @@ pub(super) fn color_row_ctx<S: std::hash::Hash + Copy + std::fmt::Debug>(
         segments[0].start_frame,
         segments[0].end_frame,
         marker_color,
+        |f| {
+            track
+                .iter()
+                .any(|channel| channel.iter().any(|k| k.frame == f))
+        },
     );
 
     if let Some(f) = t_outcome.add_point {

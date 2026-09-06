@@ -220,6 +220,7 @@ pub fn effects_section(
                                 info.min as f32,
                                 info.max as f32,
                                 button_w,
+                                false,
                             );
                             if let Some(v) = outcome.start_value {
                                 world.set_audio_plugin_param(id, index, info.id, v as f64);

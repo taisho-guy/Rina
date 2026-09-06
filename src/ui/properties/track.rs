@@ -35,6 +35,7 @@ pub fn keyframe_track(
     current_frame: i32,
     segment_start: i32,
     segment_end: i32,
+    is_real: impl Fn(i32) -> bool,
 ) -> TrackOutcome {
     keyframe_track_colored(
         ui,
@@ -46,6 +47,7 @@ pub fn keyframe_track(
         segment_start,
         segment_end,
         |_| None,
+        is_real,
     )
 }
 
@@ -59,6 +61,7 @@ pub fn keyframe_track_colored(
     segment_start: i32,
     segment_end: i32,
     marker_color: impl Fn(i32) -> Option<egui::Color32>,
+    is_real: impl Fn(i32) -> bool,
 ) -> TrackOutcome {
     let track_id = ui.make_persistent_id(id_source);
     let mut out = TrackOutcome::empty();
@@ -141,11 +144,12 @@ pub fn keyframe_track_colored(
             }
         }
     }
-    let hit_endpoint = |idx: usize| idx == 0 || idx == last;
+    let drag_locked = |idx: usize, f: i32| idx == 0 || (idx == last && !is_real(f));
+    let deletable = |idx: usize, f: i32| idx != 0 && is_real(f);
 
     if response.drag_started() {
         if let Some((idx, f, _)) = nearest {
-            if !hit_endpoint(idx) {
+            if !drag_locked(idx, f) {
                 origins.insert(track_id, f);
             }
         }
@@ -186,7 +190,7 @@ pub fn keyframe_track_colored(
             return;
         };
         match fixed_nearest {
-            Some((idx, f, d)) if d <= POINT_RADIUS * 2.5 && !hit_endpoint(idx) => {
+            Some((idx, f, d)) if d <= POINT_RADIUS * 2.5 && deletable(idx, f) => {
                 if ui
                     .add(elegance::Button::new(t!("キーフレーム削除")))
                     .clicked()
