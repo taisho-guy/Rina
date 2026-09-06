@@ -1,6 +1,7 @@
 use crate::ecs::audio_plugins::PluginInstanceRef;
 use crate::ecs::components::{
-    AudioParams, ClipTarget, GroupControl, MediaSource, ShapeParams, TextContent,
+    AudioParams, BlendMode, ClipTarget, GroupControl, MediaSource, ShapeParams, TextContent,
+    TimeRemap,
 };
 use crate::ecs::resources::SceneMeta;
 use crate::ecs::transform::Transform;
@@ -68,6 +69,66 @@ impl TryFrom<&neoutl_schema::MediaSourceDoc> for MediaSourceDoc {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct TimeRemapDoc {
+    pub keyframes: Vec<Keyframe>,
+    pub freeze_frame: Option<i32>,
+}
+
+impl From<&TimeRemap> for TimeRemapDoc {
+    fn from(value: &TimeRemap) -> Self {
+        Self {
+            keyframes: value.keyframes.clone(),
+            freeze_frame: value.freeze_frame,
+        }
+    }
+}
+
+impl From<&TimeRemapDoc> for TimeRemap {
+    fn from(value: &TimeRemapDoc) -> Self {
+        Self {
+            keyframes: value.keyframes.clone(),
+            freeze_frame: value.freeze_frame,
+        }
+    }
+}
+
+impl From<&TimeRemapDoc> for neoutl_schema::TimeRemapDoc {
+    fn from(value: &TimeRemapDoc) -> Self {
+        Self {
+            keyframes: value
+                .keyframes
+                .iter()
+                .map(neoutl_schema::Keyframe::from)
+                .collect(),
+            freeze_frame: value.freeze_frame,
+        }
+    }
+}
+
+impl TryFrom<&neoutl_schema::TimeRemapDoc> for TimeRemapDoc {
+    type Error = String;
+
+    fn try_from(value: &neoutl_schema::TimeRemapDoc) -> Result<Self, Self::Error> {
+        Ok(Self {
+            keyframes: value
+                .keyframes
+                .iter()
+                .map(Keyframe::try_from)
+                .collect::<Result<Vec<_>, _>>()?,
+            freeze_frame: value.freeze_frame,
+        })
+    }
+}
+
+fn blend_mode_to_i32(mode: BlendMode) -> i32 {
+    mode.pipeline_index() as i32
+}
+
+fn blend_mode_from_i32(value: i32) -> BlendMode {
+    BlendMode::from_pipeline_index(value.max(0) as u32)
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct ObjectPayload {
     pub text: Option<TextContent>,
     pub shape: Option<ShapeParams>,
@@ -77,6 +138,9 @@ pub struct ObjectPayload {
     pub scene: Option<i32>,
     pub group_control: Option<GroupControl>,
     pub clip_target: Option<ClipTarget>,
+    pub parent_id: Option<usize>,
+    pub blend_mode: Option<BlendMode>,
+    pub time_remap: Option<TimeRemapDoc>,
 }
 
 impl From<&ObjectPayload> for neoutl_schema::ObjectPayload {
@@ -105,6 +169,9 @@ impl From<&ObjectPayload> for neoutl_schema::ObjectPayload {
                 .as_ref()
                 .map(neoutl_schema::GroupControl::from),
             clip_target: p.clip_target.as_ref().map(neoutl_schema::ClipTarget::from),
+            parent_id: p.parent_id.map(|v| v as u64),
+            blend_mode: p.blend_mode.map(blend_mode_to_i32),
+            time_remap: p.time_remap.as_ref().map(neoutl_schema::TimeRemapDoc::from),
         }
     }
 }
@@ -140,6 +207,13 @@ impl TryFrom<&neoutl_schema::ObjectPayload> for ObjectPayload {
                 .clip_target
                 .as_ref()
                 .map(ClipTarget::try_from)
+                .transpose()?,
+            parent_id: p.parent_id.map(|v| v as usize),
+            blend_mode: p.blend_mode.map(blend_mode_from_i32),
+            time_remap: p
+                .time_remap
+                .as_ref()
+                .map(TimeRemapDoc::try_from)
                 .transpose()?,
         })
     }

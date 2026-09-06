@@ -1,7 +1,5 @@
 use crate::ecs::EcsWorld;
-use crate::ecs::components::{
-    AdjustmentLayer, BlendMode, MaskStack, ParentEntity, TimeRemap, TrackMatteSource,
-};
+use crate::ecs::components::{BlendMode, ClipMode, ClipTarget, Layer, ParentRef, TimeRemap};
 use shipyard::{Get, View};
 
 impl EcsWorld {
@@ -9,13 +7,15 @@ impl EcsWorld {
         let Some(entity) = self.find_entity(object_id) else {
             return;
         };
-        match parent_id.and_then(|pid| self.find_entity(pid)) {
-            Some(parent_entity) => {
-                self.world
-                    .add_component(entity, ParentEntity(parent_entity));
+        match parent_id {
+            Some(pid) => {
+                if pid == object_id || self.creates_parent_cycle(object_id, pid) {
+                    return;
+                }
+                self.world.add_component(entity, ParentRef(pid));
             }
             None => {
-                self.world.remove::<(ParentEntity,)>(entity);
+                self.world.remove::<(ParentRef,)>(entity);
             }
         }
         self.recompute_global_matrices();
@@ -24,46 +24,70 @@ impl EcsWorld {
 
     pub fn parent_of(&self, object_id: usize) -> Option<usize> {
         let entity = self.find_entity(object_id)?;
-        let parent_entity = self
-            .world
-            .run(|parents: View<ParentEntity>| parents.get(entity).ok().map(|p| p.0))?;
-        self.object_id_of(parent_entity)
+        self.world
+            .run(|parents: View<ParentRef>| parents.get(entity).ok().map(|p| p.0))
     }
 
-    pub fn set_track_matte(&mut self, object_id: usize, matte: Option<TrackMatteSource>) {
-        let Some(entity) = self.find_entity(object_id) else {
-            return;
-        };
-        match matte {
-            Some(m) => self.world.add_component(entity, m),
-            None => {
-                let _ = self.world.remove::<(TrackMatteSource,)>(entity);
+    fn creates_parent_cycle(&self, object_id: usize, candidate_parent: usize) -> bool {
+        const MAX_CHAIN: u32 = 4096;
+        let mut current = Some(candidate_parent);
+        let mut depth = 0u32;
+        while let Some(id) = current {
+            if id == object_id {
+                return true;
             }
+            depth += 1;
+            if depth > MAX_CHAIN {
+                return true;
+            }
+            current = self.parent_of(id);
         }
-        self.touch();
+        false
     }
 
     pub fn set_track_matte_by_id(
         &mut self,
-        object_id: usize,
-        source_object_id: Option<usize>,
-        mode: crate::ecs::components::TrackMatteMode,
+        target_id: usize,
+        source_id: Option<usize>,
+        mode: ClipMode,
     ) {
-        let matte = source_object_id
-            .and_then(|sid| self.find_entity(sid))
-            .map(|source| TrackMatteSource { source, mode });
-        self.set_track_matte(object_id, matte);
-    }
-
-    pub fn track_matte_of(&self, object_id: usize) -> Option<TrackMatteSource> {
-        let entity = self.find_entity(object_id)?;
-        self.world
-            .run(|mattes: View<TrackMatteSource>| mattes.get(entity).ok().copied())
-    }
-
-    pub fn track_matte_source_id_of(&self, object_id: usize) -> Option<usize> {
-        let matte = self.track_matte_of(object_id)?;
-        self.object_id_of(matte.source)
+        let Some(source_id) = source_id else {
+            self.set_clip_target(
+                target_id,
+                ClipTarget {
+                    enabled: false,
+                    ..ClipTarget::default()
+                },
+            );
+            return;
+        };
+        let Some((target_entity, source_entity)) =
+            self.find_entity(target_id).zip(self.find_entity(source_id))
+        else {
+            return;
+        };
+        let Some((target_layer, source_layer)) = self.world.run(|layers: View<Layer>| {
+            layers
+                .get(target_entity)
+                .ok()
+                .map(|l| l.0)
+                .zip(layers.get(source_entity).ok().map(|l| l.0))
+        }) else {
+            return;
+        };
+        let mut ct = ClipTarget {
+            enabled: true,
+            mode,
+            ..ClipTarget::default()
+        };
+        if source_layer > target_layer {
+            ct.layer_count_down = (source_layer - target_layer) as u32;
+            ct.layer_count_up = 0;
+        } else {
+            ct.layer_count_up = (target_layer - source_layer) as u32;
+            ct.layer_count_down = 0;
+        }
+        self.set_clip_target(target_id, ct);
     }
 
     pub fn set_blend_mode(&mut self, object_id: usize, mode: BlendMode) {
@@ -82,22 +106,6 @@ impl EcsWorld {
             .run(|modes: View<BlendMode>| modes.get(entity).copied().unwrap_or_default())
     }
 
-    pub fn set_mask_stack(&mut self, object_id: usize, stack: MaskStack) {
-        let Some(entity) = self.find_entity(object_id) else {
-            return;
-        };
-        self.world.add_component(entity, stack);
-        self.touch();
-    }
-
-    pub fn mask_stack_of(&self, object_id: usize) -> MaskStack {
-        let Some(entity) = self.find_entity(object_id) else {
-            return MaskStack::default();
-        };
-        self.world
-            .run(|stacks: View<MaskStack>| stacks.get(entity).cloned().unwrap_or_default())
-    }
-
     pub fn set_time_remap(&mut self, object_id: usize, remap: TimeRemap) {
         let Some(entity) = self.find_entity(object_id) else {
             return;
@@ -112,21 +120,5 @@ impl EcsWorld {
         };
         self.world
             .run(|remaps: View<TimeRemap>| remaps.get(entity).cloned().unwrap_or_default())
-    }
-
-    pub fn set_adjustment_layer(&mut self, object_id: usize, enabled: bool) {
-        let Some(entity) = self.find_entity(object_id) else {
-            return;
-        };
-        self.world.add_component(entity, AdjustmentLayer(enabled));
-        self.touch();
-    }
-
-    pub fn is_adjustment_layer(&self, object_id: usize) -> bool {
-        let Some(entity) = self.find_entity(object_id) else {
-            return false;
-        };
-        self.world
-            .run(|layers: View<AdjustmentLayer>| layers.get(entity).map(|l| l.0).unwrap_or(false))
     }
 }

@@ -211,4 +211,48 @@ impl EcsWorld {
                 .unwrap_or_default()
         })
     }
+
+    pub fn effect_stack_of(&self, object_id: usize) -> Vec<crate::ecs::types::EffectInstance> {
+        let Some(entity) = self.find_entity(object_id) else {
+            return Vec::new();
+        };
+        self.world.run(|stacks: View<EffectStack>| {
+            stacks.get(entity).map(|s| s.0.clone()).unwrap_or_default()
+        })
+    }
+
+    pub fn effect_param_f32(&self, object_id: usize, index: usize, key: &str) -> Option<f32> {
+        let entity = self.find_entity(object_id)?;
+        self.world.run(|stacks: View<EffectStack>| {
+            match stacks
+                .get(entity)
+                .ok()?
+                .0
+                .get(index)?
+                .params
+                .get(key)?
+                .static_value
+            {
+                crate::ecs::types::Value::Number(v) => Some(v),
+                _ => None,
+            }
+        })
+    }
+
+    pub fn effect_param_bool(&self, object_id: usize, index: usize, key: &str) -> bool {
+        let Some(entity) = self.find_entity(object_id) else {
+            return false;
+        };
+        self.world.run(|stacks: View<EffectStack>| {
+            matches!(
+                stacks
+                    .get(entity)
+                    .ok()
+                    .and_then(|s| s.0.get(index))
+                    .and_then(|e| e.params.get(key))
+                    .map(|p| &p.static_value),
+                Some(crate::ecs::types::Value::Bool(true))
+            )
+        })
+    }
 }

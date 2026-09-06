@@ -110,6 +110,18 @@ enum ApplyMode {
   APPLY_MODE_INTERPOLATE = 1;
 }
 
+enum BlendMode {
+  BLEND_MODE_NORMAL = 0;
+  BLEND_MODE_ADD = 1;
+  BLEND_MODE_MULTIPLY = 2;
+  BLEND_MODE_SCREEN = 3;
+  BLEND_MODE_OVERLAY = 4;
+  BLEND_MODE_DARKEN = 5;
+  BLEND_MODE_LIGHTEN = 6;
+  BLEND_MODE_DIFFERENCE = 7;
+  BLEND_MODE_EXCLUSION = 8;
+}
+
 message Keyframe {
   int32 frame = 1;
   float value = 2;
@@ -160,4 +172,9 @@ message PluginInstanceRef {
   bool bypass = 5;
   map<uint32, double> params = 6;
   repeated PluginParamInfo param_info = 7;
+}
+
+message TimeRemapDoc {
+  repeated Keyframe keyframes = 1;
+  optional int32 freeze_frame = 2;
 }

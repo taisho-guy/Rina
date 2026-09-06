@@ -391,7 +391,7 @@ impl TimelineWindow {
                     .set_track_matte_by_id(
                         target,
                         Some(source),
-                        crate::ecs::components::TrackMatteMode::Alpha,
+                        crate::ecs::components::ClipMode::Alpha,
                     );
                 self.after_structural_edit(state, preview_panel);
             }
@@ -400,11 +400,7 @@ impl TimelineWindow {
                 app_state::active_world(state)
                     .lock()
                     .unwrap()
-                    .set_track_matte_by_id(
-                        target,
-                        None,
-                        crate::ecs::components::TrackMatteMode::Alpha,
-                    );
+                    .set_track_matte_by_id(target, None, crate::ecs::components::ClipMode::Alpha);
                 self.after_structural_edit(state, preview_panel);
             }
             53 => self.select_range = None,

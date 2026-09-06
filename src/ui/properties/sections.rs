@@ -689,71 +689,48 @@ pub fn compositing_section(ui: &mut egui::Ui, world: &mut EcsWorld, id: usize) {
             }
         }
     });
-
-    ui.horizontal(|ui| {
-        ui.label(t!("調整レイヤー"));
-        let mut enabled = world.is_adjustment_layer(id);
-        if ui.add(Checkbox::new(&mut enabled, "")).changed() {
-            world.set_adjustment_layer(id, enabled);
-        }
-    });
 }
 
 pub fn mask_section(ui: &mut egui::Ui, world: &mut EcsWorld, id: usize) {
     ui.separator();
     ui.colored_label(egui::Color32::from_rgb(0x8a, 0xab, 0xff), t!("マスク"));
-    let mut stack = world.mask_stack_of(id);
-    let mut changed = false;
-    let mut remove_idx: Option<usize> = None;
-    for (i, m) in stack.0.iter_mut().enumerate() {
+    let indices: Vec<usize> = world
+        .effect_stack_of(id)
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.effect_id == "mask_shape")
+        .map(|(i, _)| i)
+        .collect();
+    for &i in &indices {
         ui.push_id(i, |ui| {
             ui.horizontal(|ui| {
                 ui.label(format!("#{i}"));
                 if ui.small_button(t!("削除")).clicked() {
-                    remove_idx = Some(i);
+                    world.remove_effect(id, i);
                 }
             });
             ui.horizontal(|ui| {
-                ui.label(t!("中心X"));
-                changed |= ui
-                    .add(Slider::new(&mut m.center_x, -1920.0..=1920.0))
-                    .changed();
-                ui.label(t!("中心Y"));
-                changed |= ui
-                    .add(Slider::new(&mut m.center_y, -1080.0..=1080.0))
-                    .changed();
+                ui.label(t!("半径/サイズ"));
+                let mut radius = world.effect_param_f32(id, i, "radius").unwrap_or(0.4);
+                if ui.add(Slider::new(&mut radius, 0.0..=1.0)).changed() {
+                    world.set_effect_param(id, i, "radius", radius);
+                }
             });
             ui.horizontal(|ui| {
-                ui.label(t!("半径X"));
-                changed |= ui.add(Slider::new(&mut m.radius_x, 0.0..=1920.0)).changed();
-                ui.label(t!("半径Y"));
-                changed |= ui.add(Slider::new(&mut m.radius_y, 0.0..=1080.0)).changed();
-            });
-            ui.horizontal(|ui| {
-                ui.label(t!("ぼかし"));
-                changed |= ui.add(Slider::new(&mut m.feather, 0.0..=500.0)).changed();
-                changed |= ui.add(Checkbox::new(&mut m.invert, t!("反転"))).changed();
+                ui.label(t!("フェザー"));
+                let mut feather = world.effect_param_f32(id, i, "feather").unwrap_or(0.0);
+                if ui.add(Slider::new(&mut feather, 0.0..=0.5)).changed() {
+                    world.set_effect_param(id, i, "feather", feather);
+                }
+                let mut invert = world.effect_param_bool(id, i, "invert");
+                if ui.add(Checkbox::new(&mut invert, t!("反転"))).changed() {
+                    world.set_effect_param_bool(id, i, "invert", invert);
+                }
             });
         });
-    }
-    if let Some(i) = remove_idx {
-        stack.0.remove(i);
-        changed = true;
     }
     if ui.small_button(t!("マスクを追加")).clicked() {
-        stack.0.push(crate::ecs::components::MaskShapeRef {
-            sides: 0,
-            center_x: 0.0,
-            center_y: 0.0,
-            radius_x: 200.0,
-            radius_y: 200.0,
-            feather: 0.0,
-            invert: false,
-        });
-        changed = true;
-    }
-    if changed {
-        world.set_mask_stack(id, stack);
+        world.add_effect(id, "mask_shape");
     }
 }
 
@@ -785,19 +762,21 @@ pub fn time_remap_section(ui: &mut egui::Ui, world: &mut EcsWorld, id: usize) {
     });
 
     let mut remove_idx: Option<usize> = None;
-    for (i, (k, v)) in remap.curve.iter_mut().enumerate() {
+    for (i, k) in remap.keyframes.iter_mut().enumerate() {
         ui.push_id(i, |ui| {
             ui.horizontal(|ui| {
                 ui.label(t!("入力フレーム"));
-                let mut kf = *k as f32;
+                let mut kf = k.frame as f32;
                 if ui.add(Slider::new(&mut kf, 0.0..=100000.0)).changed() {
-                    *k = kf.round() as i32;
+                    k.frame = kf.round() as i32;
+                    k.edit_seq = crate::ecs::types::next_edit_seq();
                     changed = true;
                 }
                 ui.label(t!("出力フレーム"));
-                let mut vf = *v as f32;
+                let mut vf = k.value;
                 if ui.add(Slider::new(&mut vf, 0.0..=100000.0)).changed() {
-                    *v = vf.round() as i32;
+                    k.value = vf;
+                    k.edit_seq = crate::ecs::types::next_edit_seq();
                     changed = true;
                 }
                 if ui.small_button(t!("削除")).clicked() {
@@ -807,13 +786,24 @@ pub fn time_remap_section(ui: &mut egui::Ui, world: &mut EcsWorld, id: usize) {
         });
     }
     if let Some(i) = remove_idx {
-        remap.curve.remove(i);
+        remap.keyframes.remove(i);
         changed = true;
     }
     if ui.small_button(t!("キーを追加")).clicked() {
-        let last = remap.curve.last().copied().unwrap_or((0, 0));
-        remap.curve.push((last.0 + 30, last.1 + 30));
-        remap.curve.sort_by_key(|&(k, _)| k);
+        let last = remap
+            .keyframes
+            .last()
+            .map(|k| (k.frame, k.value))
+            .unwrap_or((0, 0.0));
+        remap.keyframes.push(crate::ecs::types::Keyframe {
+            frame: last.0 + 30,
+            value: last.1 + 30.0,
+            engine_id: "neoutl-easing-standard".to_string(),
+            engine_payload: Vec::new(),
+            edit_seq: crate::ecs::types::next_edit_seq(),
+            apply_mode: crate::ecs::types::ApplyMode::default(),
+        });
+        remap.keyframes.sort_by_key(|k| k.frame);
         changed = true;
     }
     if changed {

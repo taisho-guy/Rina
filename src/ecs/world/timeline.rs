@@ -269,11 +269,6 @@ impl EcsWorld {
         })
     }
 
-    pub(crate) fn object_id_of(&self, entity: shipyard::EntityId) -> Option<usize> {
-        self.world
-            .run(|object_ids: View<ObjectId>| object_ids.get(entity).ok().map(|id| id.0))
-    }
-
     pub fn ripple_move_object(&mut self, object_id: usize, new_start: i32) {
         let Some(layer) = self.object_layer(object_id) else {
             return;

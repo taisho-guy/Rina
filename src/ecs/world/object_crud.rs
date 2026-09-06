@@ -1,11 +1,11 @@
-use crate::document::{MediaSourceDoc, ObjectDoc, ObjectPayload};
+use crate::document::{MediaSourceDoc, ObjectDoc, ObjectPayload, TimeRemapDoc};
 use crate::ecs::EcsWorld;
 use crate::ecs::audio_plugins::PluginChain;
 use crate::ecs::components::ParamAccess;
 use crate::ecs::components::{
-    AdjustmentLayer, AudioParams, BlendMode, ClipTarget, GroupControl, KeyframeTracks, KindId,
-    Layer, MaskStack, MediaSource, ObjectId, PluginParams, SceneId, SceneObject, ShapeParams,
-    TextContent, TimeRange, TimeRemap,
+    AudioParams, BlendMode, ClipTarget, GroupControl, KeyframeTracks, KindId, Layer, MediaSource,
+    ObjectId, ParentRef, PluginParams, SceneId, SceneObject, ShapeParams, TextContent, TimeRange,
+    TimeRemap,
 };
 use crate::ecs::effects::EffectStack;
 use crate::ecs::object_query_views::ObjectQueryViews;
@@ -45,15 +45,8 @@ impl EcsWorld {
             GlobalMatrix::default(),
             EffectStack::default(),
         ));
-        self.world.add_component(
-            entity,
-            (
-                MaskStack::default(),
-                BlendMode::default(),
-                TimeRemap::default(),
-                AdjustmentLayer::default(),
-            ),
-        );
+        self.world
+            .add_component(entity, (BlendMode::default(), TimeRemap::default()));
 
         let is_audio_kind = crate::objects::loader::by_kind_id(kind_id)
             .is_some_and(|p| p.stable_id == neoutl_object_api::AUDIO_STABLE_ID);
@@ -296,6 +289,14 @@ impl EcsWorld {
         if let Some(ct) = o.payload.clip_target {
             self.world.add_component(entity, ct);
         }
+        if let Some(parent_id) = o.payload.parent_id {
+            self.world.add_component(entity, ParentRef(parent_id));
+        }
+        self.world
+            .add_component(entity, o.payload.blend_mode.unwrap_or_default());
+        if let Some(remap) = &o.payload.time_remap {
+            self.world.add_component(entity, TimeRemap::from(remap));
+        }
         if !o.keyframes.is_empty() {
             self.world
                 .add_component(entity, KeyframeTracks(o.keyframes.clone()));
@@ -356,6 +357,9 @@ impl EcsWorld {
                         scene: views.scene_objects.get(entity).ok().map(|s| s.target_scene),
                         group_control: views.group_controls.get(entity).ok().copied(),
                         clip_target: views.clip_targets.get(entity).ok().copied(),
+                        parent_id: views.parent_refs.get(entity).ok().map(|p| p.0),
+                        blend_mode: views.blend_modes.get(entity).ok().copied(),
+                        time_remap: views.time_remaps.get(entity).ok().map(TimeRemapDoc::from),
                     },
                 });
             }
@@ -432,6 +436,7 @@ impl EcsWorld {
                 v.plugins.get(entity).ok().cloned(),
                 v.media.get(entity).ok().cloned(),
                 v.keyframes.get(entity).ok().cloned(),
+                v.blend_modes.get(entity).ok().copied().unwrap_or_default(),
             ))
         })?;
 
@@ -448,6 +453,7 @@ impl EcsWorld {
             plugins,
             media,
             keyframes,
+            blend_mode_source,
         ) = snapshot;
 
         let stack_second = stack_first.split_at(split_frame);
@@ -524,15 +530,8 @@ impl EcsWorld {
             audio2,
             stack_second,
         ));
-        self.world.add_component(
-            new_entity,
-            (
-                MaskStack::default(),
-                BlendMode::default(),
-                TimeRemap::default(),
-                AdjustmentLayer::default(),
-            ),
-        );
+        self.world
+            .add_component(new_entity, (blend_mode_source, TimeRemap::default()));
 
         if let Some(t) = text2 {
             self.world.add_component(new_entity, t);

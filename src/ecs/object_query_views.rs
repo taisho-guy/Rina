@@ -1,7 +1,8 @@
 use crate::ecs::audio_plugins::PluginChain;
 use crate::ecs::components::{
-    AudioParams, ClipTarget, GroupControl, KeyframeTracks, KindId, Layer, MediaSource, ObjectId,
-    PluginParams, SceneId, SceneObject, ShapeParams, TextContent, TimeRange,
+    AudioParams, BlendMode, ClipTarget, GroupControl, KeyframeTracks, KindId, Layer, MediaSource,
+    ObjectId, ParentRef, PluginParams, SceneId, SceneObject, ShapeParams, TextContent, TimeRange,
+    TimeRemap,
 };
 use crate::ecs::effects::EffectStack;
 use crate::ecs::transform::Transform;
@@ -26,4 +27,7 @@ pub(crate) struct ObjectQueryViews<'v> {
     pub(crate) scene_objects: View<'v, SceneObject>,
     pub(crate) group_controls: View<'v, GroupControl>,
     pub(crate) clip_targets: View<'v, ClipTarget>,
+    pub(crate) parent_refs: View<'v, ParentRef>,
+    pub(crate) blend_modes: View<'v, BlendMode>,
+    pub(crate) time_remaps: View<'v, TimeRemap>,
 }

@@ -3,8 +3,8 @@ use super::camera::{projection_for, resolve_camera, zbuffer_sort_key};
 use super::curtain::{ControllerKind, CurtainInfo, group_only, resolve_group_chain};
 use super::types::{ActiveObject, CapturedObjects, ClipTargetInfo, ComposeSource, FrameBufferKind};
 use crate::ecs::components::{
-    AudioParams, BlendMode, ClipTarget, GroupControl, KeyframeTracks, KindId, Layer, MaskStack,
-    MediaSource, ObjectId, SceneId, SceneObject, ShapeParams, TextContent, TimeRange, TimeRemap,
+    AudioParams, BlendMode, ClipTarget, GroupControl, KeyframeTracks, KindId, Layer, MediaSource,
+    ObjectId, SceneId, SceneObject, ShapeParams, TextContent, TimeRange, TimeRemap,
 };
 use crate::ecs::effects::{EffectStack, compute_effect_params_at};
 use crate::ecs::resources::{
@@ -45,11 +45,7 @@ type PayloadGroupViews<'v> = (
     View<'v, EffectStack>,
     View<'v, GroupControl>,
 );
-type TimingGroupViews<'v> = (
-    View<'v, TimeRemap>,
-    View<'v, MaskStack>,
-    View<'v, BlendMode>,
-);
+type TimingGroupViews<'v> = (View<'v, TimeRemap>, View<'v, BlendMode>);
 
 pub(crate) fn is_active_at(
     range: &TimeRange,
@@ -92,7 +88,7 @@ pub fn get_active_objects_system_at(
             effect_stacks,
             group_controls,
         ): PayloadGroupViews,
-         (time_remaps, mask_stacks, blend_modes): TimingGroupViews| {
+         (time_remaps, blend_modes): TimingGroupViews| {
             let project_width = project.width.max(1) as f32;
             let project_height = project.height.max(1) as f32;
             let max_depth = system_settings.max_group_chain_depth;
@@ -290,9 +286,6 @@ pub fn get_active_objects_system_at(
                 let mut opacity = transform.opacity;
                 for &i in &group_idx {
                     opacity *= controllers[i].opacity;
-                }
-                if let Ok(stack) = mask_stacks.get(id) {
-                    opacity *= stack.opacity_factor_at_origin();
                 }
                 let blend_mode = blend_modes.get(id).copied().unwrap_or_default();
                 let mut effects = effect_stacks

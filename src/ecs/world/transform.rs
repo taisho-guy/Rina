@@ -1,5 +1,5 @@
 use crate::ecs::EcsWorld;
-use crate::ecs::components::ParentEntity;
+use crate::ecs::components::{ObjectId, ParentRef};
 use crate::ecs::transform::{Camera, GlobalMatrix, Transform, compute_global_matrix, mat4_mul};
 use shipyard::{EntityId, Get, IntoIter, UniqueViewMut, View, ViewMut};
 use std::collections::HashMap;
@@ -63,9 +63,19 @@ impl EcsWorld {
         let local: HashMap<EntityId, [f32; 16]> = self.world.run(|matrices: View<GlobalMatrix>| {
             matrices.iter().with_id().map(|(e, m)| (e, m.0)).collect()
         });
-        let parents: HashMap<EntityId, EntityId> = self.world.run(|parents: View<ParentEntity>| {
-            parents.iter().with_id().map(|(e, p)| (e, p.0)).collect()
-        });
+        let object_ids: HashMap<EntityId, usize> = self
+            .world
+            .run(|ids: View<ObjectId>| ids.iter().with_id().map(|(e, id)| (e, id.0)).collect());
+        let entities_by_object_id: HashMap<usize, EntityId> =
+            object_ids.iter().map(|(&e, &id)| (id, e)).collect();
+        let parents: HashMap<EntityId, EntityId> =
+            self.world.run(|parent_refs: View<ParentRef>| {
+                parent_refs
+                    .iter()
+                    .with_id()
+                    .filter_map(|(e, p)| entities_by_object_id.get(&p.0).map(|&pe| (e, pe)))
+                    .collect()
+            });
 
         let mut resolved: HashMap<EntityId, [f32; 16]> = HashMap::new();
         fn resolve(

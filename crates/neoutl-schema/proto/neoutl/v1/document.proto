@@ -18,6 +18,9 @@ message ObjectPayload {
   optional int32 scene = 6;
   optional GroupControl group_control = 7;
   optional ClipTarget clip_target = 8;
+  optional uint64 parent_id = 9;
+  optional BlendMode blend_mode = 10;
+  optional TimeRemapDoc time_remap = 11;
 }
 
 message KeyframeTrack {

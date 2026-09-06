@@ -53,6 +53,13 @@ impl EcsWorld {
                         scene: views.scene_objects.get(entity).ok().map(|s| s.target_scene),
                         group_control: views.group_controls.get(entity).ok().copied(),
                         clip_target: views.clip_targets.get(entity).ok().copied(),
+                        parent_id: views.parent_refs.get(entity).ok().map(|p| p.0),
+                        blend_mode: views.blend_modes.get(entity).ok().copied(),
+                        time_remap: views
+                            .time_remaps
+                            .get(entity)
+                            .ok()
+                            .map(crate::document::TimeRemapDoc::from),
                     },
                 });
             }
