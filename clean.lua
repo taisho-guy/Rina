@@ -4,19 +4,39 @@ local string_sub = string.sub
 local table_concat = table.concat
 
 local EXCLUDE_DIRS = {
-    "target",
-    ".git",
-    "neoutl-wgpu",
-    "slang"
+    "target", ".git", ".svn", ".hg", "neoutl-wgpu", "node_modules",
+    "dist", "build", "out", ".next", ".nuxt", "__pycache__", ".venv", "venv",
+    ".idea", ".vscode", "slang"
 }
 
-local EXT_CONFIGS = {
-    rs = { jump = '[%/r%"]' },
-    lua = { jump = '[%-%"%\'%[]' },
-    slang = { jump = '[%/r%"]' },
-    json = { jump = '[%"]' },
-    toml = { jump = '[%#%"%\']' },
-    yaml = { jump = '[%#%"%\']' }
+local FAMILIES = {
+    c_like = { quotes = {'"', "'"}, line = "//", block_open = "/*", block_close = "*/" },
+    rust   = { quotes = {'"'}, line = "//", block_open = "/*", block_close = "*/", raw = true },
+    hash   = { quotes = {'"', "'"}, line = "#" },
+    sql    = { quotes = {"'"}, line = "--", block_open = "/*", block_close = "*/" },
+    html   = { quotes = {'"', "'"}, block_open = "<!--", block_close = "-->" },
+    ini    = { quotes = {'"'}, line = ";" },
+    data   = { quotes = {'"'} },
+}
+
+local EXT_FAMILY = {
+    c="c_like", h="c_like", cpp="c_like", hpp="c_like", cc="c_like", hh="c_like",
+    cxx="c_like", hxx="c_like", inl="c_like", ipp="c_like",
+    cs="c_like", java="c_like", kt="c_like", kts="c_like", scala="c_like", sc="c_like",
+    swift="c_like", go="c_like", d="c_like", zig="c_like", dart="c_like", groovy="c_like",
+    js="c_like", jsx="c_like", mjs="c_like", cjs="c_like", ts="c_like", tsx="c_like",
+    mts="c_like", cts="c_like", css="c_like", scss="c_like", less="c_like",
+    glsl="c_like", frag="c_like", vert="c_like", geom="c_like", comp="c_like",
+    tesc="c_like", tese="c_like", hlsl="c_like", wgsl="c_like", metal="c_like", shader="c_like",
+    php="c_like", phtml="c_like", qml="c_like", proto="c_like", graphql="c_like", gql="c_like",
+    rs="rust", slang="rust",
+    py="hash", pyw="hash", sh="hash", bash="hash", zsh="hash", fish="hash",
+    rb="hash", rake="hash", pl="hash", pm="hash", r="hash", nim="hash",
+    yaml="hash", yml="hash", toml="hash",
+    sql="sql", prisma="sql", surrealql="sql",
+    html="html", htm="html", xhtml="html", xml="html", vue="html", svelte="html",
+    ini="ini", cfg="ini", properties="ini",
+    json="data", json5="data", jsonc="data",
 }
 
 local IS_WINDOWS = os.getenv("OS") and os.getenv("OS"):match("[Ww]indows") or os.getenv("WINDIR") ~= nil
@@ -25,94 +45,139 @@ local function normalize_path(path)
     return path:gsub("\\", "/")
 end
 
-local function clean_comments(content, ext)
+local function pattern_class(chars)
+    local seen, out = {}, {}
+    for _, c in ipairs(chars) do
+        if not seen[c] then
+            seen[c] = true
+            if c:match("[%%%^%]%-]") then
+                out[#out+1] = "%" .. c
+            else
+                out[#out+1] = c
+            end
+        end
+    end
+    return "[" .. table_concat(out) .. "]"
+end
+
+local function build_jump(fam)
+    local chars = {}
+    for _, q in ipairs(fam.quotes or {}) do chars[#chars+1] = q end
+    if fam.line then chars[#chars+1] = fam.line:sub(1,1) end
+    if fam.block_open then chars[#chars+1] = fam.block_open:sub(1,1) end
+    if fam.raw then chars[#chars+1] = "r" end
+    return pattern_class(chars)
+end
+
+for _, fam in pairs(FAMILIES) do
+    fam.jump = build_jump(fam)
+end
+
+local function skip_quote(content, len, i, q)
+    i = i + 1
+    while i <= len do
+        local _, end_idx = string_find(content, q, i, true)
+        if not end_idx then return len + 1 end
+        local esc, chk = 0, end_idx - 1
+        while chk >= i and string_sub(content, chk, chk) == '\\' do
+            esc = esc + 1
+            chk = chk - 1
+        end
+        i = end_idx + 1
+        if esc % 2 == 0 then return i end
+    end
+    return i
+end
+
+local function skip_raw_string(content, len, i)
+    local n2 = string_sub(content, i+1, i+1)
+    if n2 == '"' then
+        i = i + 2
+        local _, end_idx = string_find(content, '"', i, true)
+        return end_idx and (end_idx + 1) or (len + 1)
+    elseif n2 == '#' then
+        local _, sharp_end = string_find(content, '"', i + 2, true)
+        if not sharp_end then return i + 1 end
+        local sharps = string_sub(content, i+1, sharp_end-1)
+        local close = '"' .. sharps
+        local _, end_idx = string_find(content, close, sharp_end, true)
+        return end_idx and (end_idx + #close) or (len + 1)
+    end
+    return i + 1
+end
+
+local function clean_generic(content, fam)
     local len = #content
-    local result = {}
-    local r_idx = 1
-    local last_pos = 1
-    local i = 1
-    local config = EXT_CONFIGS[ext]
+    local result, r_idx, last_pos, i = {}, 1, 1, 1
 
     while i <= len do
-        local next_idx = string_find(content, config.jump, i)
+        local next_idx = string_find(content, fam.jump, i)
         if not next_idx then break end
-        
+        i = next_idx
+        local c1 = string_sub(content, i, i)
+        local is_quote = false
+
+        for _, q in ipairs(fam.quotes or {}) do
+            if c1 == q then
+                is_quote = true
+                i = skip_quote(content, len, i, q)
+                break
+            end
+        end
+
+        if not is_quote then
+            if fam.raw and c1 == 'r' then
+                i = skip_raw_string(content, len, i)
+            elseif fam.block_open and string_sub(content, i, i + #fam.block_open - 1) == fam.block_open then
+                result[r_idx] = string_sub(content, last_pos, i - 1)
+                r_idx = r_idx + 1
+                local _, e = string_find(content, fam.block_close, i + #fam.block_open, true)
+                i = e and (e + 1) or (len + 1)
+                last_pos = i
+            elseif fam.line and string_sub(content, i, i + #fam.line - 1) == fam.line then
+                result[r_idx] = string_sub(content, last_pos, i - 1)
+                r_idx = r_idx + 1
+                local _, e = string_find(content, "\n", i + #fam.line, true)
+                i = e and (e + 1) or (len + 1)
+                last_pos = i
+            else
+                i = i + 1
+            end
+        end
+    end
+
+    if r_idx > 1 then
+        result[r_idx] = string_sub(content, last_pos, len)
+        return table_concat(result)
+    end
+    return nil
+end
+
+local LUA_JUMP = '[%-%"%\'%[]'
+
+local function clean_lua(content)
+    local len = #content
+    local result, r_idx, last_pos, i = {}, 1, 1, 1
+
+    while i <= len do
+        local next_idx = string_find(content, LUA_JUMP, i)
+        if not next_idx then break end
         i = next_idx
         local b1 = string_sub(content, i, i)
 
         if b1 == '"' or b1 == "'" then
-            local q = b1
-            i = i + 1
-            while i <= len do
-                local _, end_idx = string_find(content, q, i, true)
-                if not end_idx then i = len + 1 break end
-                
-                local esc_count = 0
-                local check_idx = end_idx - 1
-                while check_idx >= i and string_sub(content, check_idx, check_idx) == '\\' do
-                    esc_count = esc_count + 1
-                    check_idx = check_idx - 1
-                end
-                
-                if esc_count % 2 == 0 then
-                    i = end_idx + 1
-                    break
-                else
-                    i = end_idx + 1
-                end
-            end
-
-        elseif (ext == "rs" or ext == "slang") and b1 == 'r' then
-            local n2 = string_sub(content, i+1, i+2)
-            if string_sub(n2, 1, 1) == '"' then
-                i = i + 2
-                local _, end_idx = string_find(content, '"', i, true)
-                i = end_idx and (end_idx + 1) or (len + 1)
-            elseif string_sub(n2, 1, 1) == '#' then
-                local _, start_sharp_end = string_find(content, '"', i + 2, true)
-                if start_sharp_end then
-                    local sharps = string_sub(content, i + 1, start_sharp_end - 1)
-                    local close_pattern = '"' .. sharps
-                    local _, end_idx = string_find(content, close_pattern, start_sharp_end, true)
-                    i = end_idx and (end_idx + #close_pattern) or (len + 1)
-                else
-                    i = i + 1
-                end
-            else
-                i = i + 1
-            end
-
-        elseif (ext == "rs" or ext == "slang") and b1 == '/' then
-            local b2 = string_sub(content, i+1, i+1)
-            if b2 == '/' then
-                result[r_idx] = string_sub(content, last_pos, i - 1)
-                r_idx = r_idx + 1
-                local _, e = string_find(content, "\n", i + 2, true)
-                i = e and (e + 1) or (len + 1)
-                last_pos = i
-            elseif b2 == '*' then
-                result[r_idx] = string_sub(content, last_pos, i - 1)
-                r_idx = r_idx + 1
-                local _, e = string_find(content, "*/", i + 2, true)
-                i = e and (e + 2) or (len + 1)
-                last_pos = i
-            else
-                i = i + 1
-            end
-
-        elseif ext == "lua" and b1 == '[' then
+            i = skip_quote(content, len, i, b1)
+        elseif b1 == '[' then
             if string_sub(content, i+1, i+1) == '[' then
                 local _, end_idx = string_find(content, ']]', i + 2, true)
                 i = end_idx and (end_idx + 2) or (len + 1)
             else
                 i = i + 1
             end
-
-        elseif ext == "lua" and b1 == '-' then
+        elseif b1 == '-' then
             if string_sub(content, i+1, i+1) == '-' then
                 result[r_idx] = string_sub(content, last_pos, i - 1)
                 r_idx = r_idx + 1
-                
                 if string_sub(content, i+2, i+3) == '[[' then
                     local _, e = string_find(content, "]]", i + 4, true)
                     i = e and (e + 2) or (len + 1)
@@ -124,14 +189,6 @@ local function clean_comments(content, ext)
             else
                 i = i + 1
             end
-
-        elseif (ext == "toml" or ext == "yaml") and b1 == '#' then
-            result[r_idx] = string_sub(content, last_pos, i - 1)
-            r_idx = r_idx + 1
-            local _, e = string_find(content, "\n", i + 1, true)
-            i = e and (e + 1) or (len + 1)
-            last_pos = i
-
         else
             i = i + 1
         end
@@ -142,6 +199,13 @@ local function clean_comments(content, ext)
         return table_concat(result)
     end
     return nil
+end
+
+local function clean_comments(content, ext)
+    if ext == "lua" then return clean_lua(content) end
+    local family = EXT_FAMILY[ext]
+    if not family then return nil end
+    return clean_generic(content, FAMILIES[family])
 end
 
 local function remove_comments_from_file(filepath, ext)
@@ -176,12 +240,31 @@ local function is_excluded(filepath)
     return false
 end
 
+local function target_extensions()
+    local exts = { lua = true }
+    for ext, _ in pairs(EXT_FAMILY) do exts[ext] = true end
+    return exts
+end
+
+local function build_find_cmd()
+    local parts = { "find . -type f \\(" }
+    local first = true
+    for ext, _ in pairs(target_extensions()) do
+        if not first then parts[#parts+1] = "-o" end
+        parts[#parts+1] = '-name "*.' .. ext .. '"'
+        first = false
+    end
+    parts[#parts+1] = "\\) -print"
+    return table_concat(parts, " ")
+end
+
 local function scan_project()
+    local exts = target_extensions()
     local cmd
     if IS_WINDOWS then
         cmd = 'dir /b /s /a-d 2>nul'
     else
-        cmd = 'find . -type f \\( -name "*.rs" -o -name "*.lua" -o -name "*.slang" -o -name "*.json" -o -name "*.toml" -o -name "*.yaml" \\) -print'
+        cmd = build_find_cmd()
     end
 
     local p = io.popen(cmd)
@@ -191,8 +274,11 @@ local function scan_project()
         local file = normalize_path(raw_file)
         if file ~= "" and not is_excluded(file) then
             local ext = file:match("%.([^%.]+)$")
-            if ext and EXT_CONFIGS[ext] then
-                remove_comments_from_file(file, ext)
+            if ext then
+                ext = ext:lower()
+                if ext == "lua" or exts[ext] then
+                    remove_comments_from_file(file, ext)
+                end
             end
         end
     end

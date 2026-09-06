@@ -1,7 +1,3 @@
-// P0xx(NV12/P010LE/P012LE/P016LE)平面テクスチャ -> Rgba8Unorm合成。
-// neo-media-swscale::ops_chain::SwscaleUniformsとフィールド順・バイト幅を一致させる。
-// tap_count_h/v==1固定経路のみ実装(ScaleH/ScaleV opはgraph.rsが比率1:1時に省略するため
-// 通常到達しない。tap_buffer_h/vはバインディング形状維持のため宣言のみ、本経路では未使用)。
 struct SwscaleUniforms {
     color_matrix: u32,
     color_range: u32,
