@@ -2,7 +2,7 @@ use crate::app_state::{self, SharedAppState};
 use crate::ecs::SceneSettings;
 use crate::project;
 use crate::ui::system_settings::fields::{
-    choice_field, float_field, int_field, name_field, toggle_field,
+    choice_field, float_text_field, int_text_field, name_field, toggle_field,
 };
 use crate::ui::ui_ext::UiExt;
 use egui::{Context, Ui};
@@ -169,9 +169,9 @@ impl SceneSettingsWindow {
                         .num_columns(2)
                         .show(ui, |ui| {
                             name_field(ui, "シーン名:", &mut self.scene_name);
-                            int_field(ui, "幅:", &mut self.scene_width, 1, 8000);
-                            int_field(ui, "高さ:", &mut self.scene_height, 1, 8000);
-                            float_field(ui, "FPS:", &mut self.scene_fps);
+                            int_text_field(ui, "幅:", &mut self.scene_width, 1, 8000);
+                            int_text_field(ui, "高さ:", &mut self.scene_height, 1, 8000);
+                            float_text_field(ui, "FPS:", &mut self.scene_fps, 1.0, 1000.0);
                         });
                 });
 
@@ -180,7 +180,7 @@ impl SceneSettingsWindow {
                         .num_columns(2)
                         .show(ui, |ui| {
                             toggle_field(ui, "スナップを有効にする", &mut self.enable_snap);
-                            int_field(
+                            int_text_field(
                                 ui,
                                 "磁力スナップ範囲:",
                                 &mut self.magnetic_snap_range,
@@ -206,9 +206,21 @@ impl SceneSettingsWindow {
                         egui::Grid::new("scene_settings_bpm")
                             .num_columns(2)
                             .show(ui, |ui| {
-                                float_field(ui, "BPM:", &mut self.grid_bpm);
-                                int_field(ui, "拍子 (分割数):", &mut self.grid_subdivision, 1, 32);
-                                float_field(ui, "オフセット (秒):", &mut self.grid_offset);
+                                float_text_field(ui, "BPM:", &mut self.grid_bpm, 1.0, 999.0);
+                                int_text_field(
+                                    ui,
+                                    "拍子 (分割数):",
+                                    &mut self.grid_subdivision,
+                                    1,
+                                    32,
+                                );
+                                float_text_field(
+                                    ui,
+                                    "オフセット (秒):",
+                                    &mut self.grid_offset,
+                                    -3600.0,
+                                    3600.0,
+                                );
                             });
                     });
                 }
@@ -218,7 +230,13 @@ impl SceneSettingsWindow {
                         egui::Grid::new("scene_settings_frame")
                             .num_columns(2)
                             .show(ui, |ui| {
-                                int_field(ui, "間隔 (Frames):", &mut self.grid_interval, 1, 1000);
+                                int_text_field(
+                                    ui,
+                                    "間隔 (Frames):",
+                                    &mut self.grid_interval,
+                                    1,
+                                    1000,
+                                );
                             });
                     });
                 }

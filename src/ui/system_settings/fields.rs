@@ -41,11 +41,59 @@ pub fn int_field(ui: &mut Ui, label: &str, value: &mut i32, min: i32, max: i32) 
     changed
 }
 
-pub fn float_field(ui: &mut Ui, label: &str, value: &mut f32) -> bool {
+pub fn int_text_field(ui: &mut Ui, label: &str, value: &mut i32, min: i32, max: i32) -> bool {
     field_label(ui, label);
-    let changed = ui
-        .add(Slider::new(value, f32::MIN..=f32::MAX).step(0.1))
-        .changed();
+    let id = ui.id().with(label);
+    let mut buf = ui
+        .data_mut(|d| d.get_temp::<String>(id))
+        .unwrap_or_else(|| value.to_string());
+    let resp = ui.add_sized(
+        egui::vec2(ui.available_width(), field_height(ui)),
+        TextInput::new(&mut buf),
+    );
+    let mut changed = false;
+    if resp.changed()
+        && let Ok(parsed) = buf.trim().parse::<i32>()
+    {
+        let clamped = parsed.clamp(min, max);
+        if clamped != *value {
+            *value = clamped;
+            changed = true;
+        }
+    }
+    if !resp.has_focus() {
+        buf = value.to_string();
+    }
+    ui.data_mut(|d| d.insert_temp(id, buf));
+    ui.end_row();
+    changed
+}
+
+pub fn float_text_field(ui: &mut Ui, label: &str, value: &mut f32, min: f32, max: f32) -> bool {
+    field_label(ui, label);
+    let id = ui.id().with(label);
+    let mut buf = ui
+        .data_mut(|d| d.get_temp::<String>(id))
+        .unwrap_or_else(|| value.to_string());
+    let resp = ui.add_sized(
+        egui::vec2(ui.available_width(), field_height(ui)),
+        TextInput::new(&mut buf),
+    );
+    let mut changed = false;
+    if resp.changed()
+        && let Ok(parsed) = buf.trim().parse::<f32>()
+        && parsed.is_finite()
+    {
+        let clamped = parsed.clamp(min, max);
+        if clamped != *value {
+            *value = clamped;
+            changed = true;
+        }
+    }
+    if !resp.has_focus() {
+        buf = value.to_string();
+    }
+    ui.data_mut(|d| d.insert_temp(id, buf));
     ui.end_row();
     changed
 }
