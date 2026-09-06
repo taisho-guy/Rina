@@ -3,6 +3,9 @@ use maolan_host_adapter::{PluginCatalogEntry, PluginFormat};
 use neo_media_ffmpeg::default_hw_device_type_priority;
 use shipyard::Unique;
 
+pub mod preset_store;
+pub use preset_store::{PresetData, PresetStore};
+
 #[derive(Clone, Debug, Unique)]
 pub struct ProjectResource {
     pub name: String,

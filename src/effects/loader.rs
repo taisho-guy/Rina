@@ -14,6 +14,8 @@ pub struct EffectPlugin {
     pub id: String,
     pub name: String,
     pub category: String,
+    #[allow(dead_code)]
+    pub uuid: String,
     pub vtable: &'static EffectVTable,
     _lib: Library,
 }
@@ -27,6 +29,14 @@ impl EffectSource {
     pub fn id(&self) -> &str {
         match self {
             Self::Native(p) => &p.id,
+            Self::Lua(s) => &s.id,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn uuid(&self) -> &str {
+        match self {
+            Self::Native(p) => &p.uuid,
             Self::Lua(s) => &s.id,
         }
     }
@@ -285,10 +295,17 @@ fn load_one(path: &Path) -> Result<EffectPlugin, PluginError> {
         unsafe { lib.get(ENTRY_SYMBOL) }.map_err(|e| PluginError::Load(e.to_string()))?;
     let vtable: &'static EffectVTable = unsafe { &*entry() };
     let meta = unsafe { &*((vtable.meta)()) };
+    let uuid_str = unsafe { meta.uuid.as_str() };
+    let uuid = if uuid_str.is_empty() {
+        meta.id.to_owned()
+    } else {
+        uuid_str.to_owned()
+    };
     Ok(EffectPlugin {
         id: meta.id.to_owned(),
         name: meta.name.to_owned(),
         category: meta.category.to_owned(),
+        uuid,
         vtable,
         _lib: lib,
     })

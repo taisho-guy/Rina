@@ -1,7 +1,8 @@
 use crate::ecs::EcsWorld;
 use crate::ecs::resources;
 use crate::ecs::resources::{
-    LayerStates, ProjectResource, SceneResource, SystemSettingsResource, TimelineResource,
+    LayerStates, PresetStore, ProjectResource, SceneResource, SystemSettingsResource,
+    TimelineResource,
 };
 use crate::ecs::transform::Camera;
 use shipyard::World;
@@ -15,6 +16,7 @@ impl EcsWorld {
         world.add_unique(SceneResource::new());
         world.add_unique(SystemSettingsResource::new());
         world.add_unique(Camera::default());
+        world.add_unique(PresetStore::new());
         Self {
             world,
             selected_ids: std::collections::HashSet::new(),

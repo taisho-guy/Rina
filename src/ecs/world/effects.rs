@@ -1,6 +1,6 @@
 use crate::ecs::EcsWorld;
 use crate::ecs::effects::{self, EffectStack};
-use shipyard::{Get, View, ViewMut};
+use shipyard::{Get, UniqueView, UniqueViewMut, View, ViewMut};
 
 impl EcsWorld {
     pub fn add_effect(&mut self, object_id: usize, effect_id: &str) {
@@ -254,5 +254,135 @@ impl EcsWorld {
                 Some(crate::ecs::types::Value::Bool(true))
             )
         })
+    }
+
+    #[allow(dead_code)]
+    pub fn save_effect_preset(
+        &mut self,
+        object_id: usize,
+        effect_index: usize,
+        preset_name: &str,
+    ) -> Result<crate::ecs::resources::PresetData, String> {
+        let Some(entity) = self.find_entity(object_id) else {
+            return Err("Object not found".to_string());
+        };
+
+        let (effect_id, params) = self.world.run(|stacks: View<EffectStack>| {
+            let stack = stacks
+                .get(entity)
+                .map_err(|_| "EffectStack not found".to_string())?;
+            let instance = stack
+                .0
+                .get(effect_index)
+                .ok_or_else(|| "Effect index out of range".to_string())?;
+            let mut list = Vec::new();
+            for (key, param) in &instance.params {
+                if let crate::ecs::types::Value::Number(val) = param.static_value {
+                    list.push((key.clone(), val));
+                }
+            }
+            list.sort_by(|a, b| a.0.cmp(&b.0));
+            Ok::<_, String>((instance.effect_id.clone(), list))
+        })?;
+
+        let effect_uuid = crate::effects::loader::by_id(&effect_id)
+            .map(|s| s.uuid().to_string())
+            .unwrap_or(effect_id);
+
+        let mut store = self
+            .world
+            .borrow::<UniqueViewMut<crate::ecs::resources::PresetStore>>()
+            .map_err(|e| e.to_string())?;
+        store
+            .save_preset(&effect_uuid, preset_name, params)
+            .map_err(|e| e.to_string())
+    }
+
+    #[allow(dead_code)]
+    pub fn apply_effect_preset(
+        &mut self,
+        object_id: usize,
+        effect_index: usize,
+        preset_id: &str,
+    ) -> Result<bool, String> {
+        let Some(entity) = self.find_entity(object_id) else {
+            return Err("Object not found".to_string());
+        };
+
+        let effect_id = self.world.run(|stacks: View<EffectStack>| {
+            let stack = stacks
+                .get(entity)
+                .map_err(|_| "EffectStack not found".to_string())?;
+            let instance = stack
+                .0
+                .get(effect_index)
+                .ok_or_else(|| "Effect index out of range".to_string())?;
+            Ok::<_, String>(instance.effect_id.clone())
+        })?;
+
+        let effect_uuid = crate::effects::loader::by_id(&effect_id)
+            .map(|s| s.uuid().to_string())
+            .unwrap_or(effect_id);
+
+        let preset = {
+            let store = self
+                .world
+                .borrow::<UniqueView<crate::ecs::resources::PresetStore>>()
+                .map_err(|e| e.to_string())?;
+            store.find_preset(&effect_uuid, preset_id).cloned()
+        };
+
+        let Some(preset) = preset else {
+            return Ok(false);
+        };
+
+        self.world.run(|mut stacks: ViewMut<EffectStack>| {
+            if let Ok(mut stack) = (&mut stacks).get(entity) {
+                if let Some(instance) = stack.0.get_mut(effect_index) {
+                    for (key, val) in preset.params {
+                        if let Some(param) = instance.params.get_mut(&key) {
+                            param.static_value = crate::ecs::types::Value::Number(val);
+                        }
+                    }
+                }
+            }
+        });
+
+        self.touch();
+        Ok(true)
+    }
+
+    #[allow(dead_code)]
+    pub fn get_effect_presets_for(
+        &self,
+        effect_id_or_uuid: &str,
+    ) -> Vec<crate::ecs::resources::PresetData> {
+        let effect_uuid = crate::effects::loader::by_id(effect_id_or_uuid)
+            .map(|s| s.uuid().to_string())
+            .unwrap_or_else(|| effect_id_or_uuid.to_string());
+
+        self.world
+            .borrow::<UniqueView<crate::ecs::resources::PresetStore>>()
+            .map(|store| store.get_presets_for_effect(&effect_uuid).to_vec())
+            .unwrap_or_default()
+    }
+
+    #[allow(dead_code)]
+    pub fn delete_effect_preset(
+        &mut self,
+        effect_id_or_uuid: &str,
+        preset_id: &str,
+    ) -> Result<bool, String> {
+        let effect_uuid = crate::effects::loader::by_id(effect_id_or_uuid)
+            .map(|s| s.uuid().to_string())
+            .unwrap_or_else(|| effect_id_or_uuid.to_string());
+
+        let mut store = self
+            .world
+            .borrow::<UniqueViewMut<crate::ecs::resources::PresetStore>>()
+            .map_err(|e| e.to_string())?;
+        store
+            .delete_preset(&effect_uuid, preset_id)
+            .map_err(|e| e.to_string())
     }
 }
