@@ -104,6 +104,35 @@ impl EffectSource {
             },
         }
     }
+
+    pub fn setup_accelerator(
+        &self,
+        handle: &neoutl_effect_api::AcceleratorHandle,
+    ) -> Result<(), u32> {
+        match self {
+            Self::Native(p) => {
+                if let Some(f) = p.vtable.setup_accelerator {
+                    let res = unsafe { f(handle as *const _) };
+                    if res == 0 { Ok(()) } else { Err(res) }
+                } else {
+                    Ok(())
+                }
+            }
+            Self::Lua(_) => Ok(()),
+        }
+    }
+}
+
+pub fn broadcast_setup_accelerator(handle: &neoutl_effect_api::AcceleratorHandle) {
+    let sources = registry();
+    for source in sources.iter() {
+        if let Err(code) = source.setup_accelerator(handle) {
+            eprintln!(
+                "[NeoUtl] エフェクトプラグイン '{}' のsetup_accelerator失敗: code={code}",
+                source.id()
+            );
+        }
+    }
 }
 
 fn registry_swap() -> &'static ArcSwap<Vec<Arc<EffectSource>>> {

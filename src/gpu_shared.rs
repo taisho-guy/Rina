@@ -10,6 +10,31 @@ pub struct SharedGpu {
     pub queue: Arc<wgpu::Queue>,
 }
 
+impl SharedGpu {
+    pub fn backend_kind(&self) -> neoutl_shared_abi::AcceleratorBackend {
+        match self.adapter.get_info().backend {
+            wgpu::Backend::Vulkan => neoutl_shared_abi::AcceleratorBackend::Vulkan,
+            wgpu::Backend::Metal => neoutl_shared_abi::AcceleratorBackend::Metal,
+            wgpu::Backend::Dx12 => neoutl_shared_abi::AcceleratorBackend::Dx12,
+            _ => neoutl_shared_abi::AcceleratorBackend::Unknown,
+        }
+    }
+
+    pub fn create_accelerator_handle(&self) -> neoutl_shared_abi::AcceleratorHandle {
+        neoutl_shared_abi::AcceleratorHandle::new(
+            self.backend_kind(),
+            Arc::as_ptr(&self.device) as *const (),
+            Arc::as_ptr(&self.queue) as *const (),
+        )
+    }
+
+    pub fn broadcast_accelerator(&self) {
+        let handle = self.create_accelerator_handle();
+        crate::effects::broadcast_setup_accelerator(&handle);
+        crate::objects::broadcast_setup_accelerator(&handle);
+    }
+}
+
 pub fn locked_submit(
     queue: &wgpu::Queue,
     buffers: impl IntoIterator<Item = wgpu::CommandBuffer>,
@@ -179,12 +204,15 @@ pub fn init_shared_gpu() -> Result<SharedGpu, Box<dyn std::error::Error>> {
         let queue = Arc::new(queue);
         neo_media_ffmpeg::set_shared_wgpu_device(device.clone(), queue.clone());
 
-        return Ok(SharedGpu {
+        let gpu = SharedGpu {
             instance,
             adapter: wgpu_adapter,
             device,
             queue,
-        });
+        };
+        gpu.broadcast_accelerator();
+
+        return Ok(gpu);
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -226,11 +254,13 @@ pub fn init_shared_gpu() -> Result<SharedGpu, Box<dyn std::error::Error>> {
 
         crate::renderer::pipeline::install_device_lost_watcher(&device);
 
-        Ok(SharedGpu {
+        let gpu = SharedGpu {
             instance,
             adapter,
             device: Arc::new(device),
             queue: Arc::new(queue),
-        })
+        };
+        gpu.broadcast_accelerator();
+        Ok(gpu)
     }
 }

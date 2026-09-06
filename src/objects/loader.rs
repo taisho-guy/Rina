@@ -17,6 +17,32 @@ pub struct ObjectPlugin {
     _lib: Option<Library>,
 }
 
+impl ObjectPlugin {
+    pub fn setup_accelerator(
+        &self,
+        handle: &neoutl_object_api::AcceleratorHandle,
+    ) -> Result<(), u32> {
+        if let Some(f) = self.vtable.setup_accelerator {
+            let res = unsafe { f(handle as *const _) };
+            if res == 0 { Ok(()) } else { Err(res) }
+        } else {
+            Ok(())
+        }
+    }
+}
+
+pub fn broadcast_setup_accelerator(handle: &neoutl_object_api::AcceleratorHandle) {
+    let plugins = registry();
+    for plugin in plugins.iter() {
+        if let Err(code) = plugin.setup_accelerator(handle) {
+            eprintln!(
+                "[NeoUtl] オブジェクトプラグイン '{}' のsetup_accelerator失敗: code={code}",
+                plugin.stable_id
+            );
+        }
+    }
+}
+
 fn registry_swap() -> &'static ArcSwap<Vec<Arc<ObjectPlugin>>> {
     static SWAP: OnceLock<ArcSwap<Vec<Arc<ObjectPlugin>>>> = OnceLock::new();
     SWAP.get_or_init(|| ArcSwap::new(Arc::new(Vec::new())))

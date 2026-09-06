@@ -224,3 +224,51 @@ fn resize_render_target_updates_dimensions_and_survives_render() {
     );
     assert_eq!(pixels.len(), (128 * 72 * 4) as usize);
 }
+
+#[test]
+fn test_broadcast_setup_accelerator_to_all_plugins() {
+    let dummy_ptr = 0x1234 as *const ();
+    let handle = neoutl_shared_abi::AcceleratorHandle::new(
+        neoutl_shared_abi::AcceleratorBackend::Mock,
+        dummy_ptr,
+        dummy_ptr,
+    );
+    crate::objects::broadcast_setup_accelerator(&handle);
+    crate::effects::broadcast_setup_accelerator(&handle);
+}
+
+#[test]
+fn test_reconfigure_accelerator_rebinds_and_renders() {
+    let Some((device, queue)) = headless_device() else {
+        eprintln!("{}", t!("[test] GPUアダプタ非検出、テストskip"));
+        return;
+    };
+    let mut engine = RenderEngine::new(device, queue, 64, 64);
+
+    let Some((new_device, new_queue)) = headless_device() else {
+        eprintln!("{}", t!("[test] 2個目のGPUアダプタ非検出、テストskip"));
+        return;
+    };
+
+    engine.reconfigure_accelerator(
+        Arc::new(new_device),
+        Arc::new(new_queue),
+        neoutl_shared_abi::AcceleratorBackend::Mock,
+    );
+
+    assert!(!is_device_lost());
+
+    let project = ProjectResource::new();
+    let world = crate::ecs::EcsWorld::new();
+    let captured = std::collections::HashMap::new();
+    engine.render(&world, &[], &captured, &project);
+
+    let pixels = read_texture_rgba16f(
+        &engine.device,
+        &engine.queue,
+        &engine.texture,
+        engine.render_width,
+        engine.render_height,
+    );
+    assert_eq!(pixels.len(), (64 * 64 * 4) as usize);
+}

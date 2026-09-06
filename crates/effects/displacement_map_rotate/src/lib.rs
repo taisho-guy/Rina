@@ -120,6 +120,19 @@ unsafe extern "C" fn pack_uniform(params_ptr: *const f32, count: u32, out_ptr: *
     unsafe { pack_uniform_std(params_ptr, count, out_ptr) }
 }
 
+unsafe extern "C" fn setup_accelerator(
+    accelerator: *const neoutl_effect_api::AcceleratorHandle,
+) -> u32 {
+    if accelerator.is_null() {
+        return 1;
+    }
+    let handle = unsafe { &*accelerator };
+    if handle.version != neoutl_effect_api::AcceleratorHandle::CURRENT_VERSION {
+        return 2;
+    }
+    0
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn neoutl_effect_entry() -> *const EffectVTable {
     VTABLE.get_or_init(|| EffectVTable {
@@ -134,6 +147,7 @@ pub unsafe extern "C" fn neoutl_effect_entry() -> *const EffectVTable {
         on_property_edited: None,
         on_property_restored: None,
         poll_writeback: None,
+        setup_accelerator: Some(setup_accelerator),
     })
 }
 

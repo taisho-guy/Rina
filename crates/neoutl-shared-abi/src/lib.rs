@@ -194,3 +194,58 @@ impl std::fmt::Display for PluginError {
     }
 }
 impl std::error::Error for PluginError {}
+
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AcceleratorBackend {
+    Unknown = 0,
+    Vulkan = 1,
+    Metal = 2,
+    Dx12 = 3,
+    Cpu = 4,
+    Mock = 5,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct AcceleratorHandle {
+    pub version: u32,
+    pub backend_kind: u32,
+    pub device_ptr: *const (),
+    pub queue_ptr: *const (),
+}
+unsafe impl Send for AcceleratorHandle {}
+unsafe impl Sync for AcceleratorHandle {}
+
+impl AcceleratorHandle {
+    pub const CURRENT_VERSION: u32 = 1;
+
+    pub fn new(
+        backend_kind: AcceleratorBackend,
+        device_ptr: *const (),
+        queue_ptr: *const (),
+    ) -> Self {
+        Self {
+            version: Self::CURRENT_VERSION,
+            backend_kind: backend_kind as u32,
+            device_ptr,
+            queue_ptr,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_accelerator_handle_creation() {
+        let dev = 0x1000 as *const ();
+        let q = 0x2000 as *const ();
+        let handle = AcceleratorHandle::new(AcceleratorBackend::Vulkan, dev, q);
+        assert_eq!(handle.version, AcceleratorHandle::CURRENT_VERSION);
+        assert_eq!(handle.backend_kind, AcceleratorBackend::Vulkan as u32);
+        assert_eq!(handle.device_ptr, dev);
+        assert_eq!(handle.queue_ptr, q);
+    }
+}

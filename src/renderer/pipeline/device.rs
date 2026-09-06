@@ -22,3 +22,8 @@ pub fn install_device_lost_watcher(device: &wgpu::Device) {
         mark_device_lost(&format!("{reason:?}: {message}"));
     });
 }
+
+#[allow(dead_code)]
+pub fn reset_device_lost() {
+    DEVICE_LOST.store(false, Ordering::Relaxed);
+}

@@ -1,5 +1,6 @@
 pub use neoutl_shared_abi::{
-    EffectKind, FfiSlice, ParamKind, PropertyWriteback, Roi, StrRef, WgslSource,
+    AcceleratorBackend, AcceleratorHandle, EffectKind, FfiSlice, ParamKind, PropertyWriteback, Roi,
+    StrRef, WgslSource,
 };
 pub type EffectParamSchema = neoutl_shared_abi::ParamSchema;
 
@@ -56,6 +57,9 @@ pub struct EffectVTable {
 
     pub poll_writeback:
         Option<unsafe extern "C" fn(out_ptr: *mut PropertyWriteback, out_cap: u32) -> u32>,
+
+    pub setup_accelerator:
+        Option<unsafe extern "C" fn(accelerator: *const AcceleratorHandle) -> u32>,
 }
 
 pub const ENTRY_SYMBOL: &[u8] = b"neoutl_effect_entry\0";
@@ -71,5 +75,62 @@ pub unsafe fn pack_uniform_std(params_ptr: *const f32, count: u32, out_ptr: *mut
         std::ptr::write_bytes(out_ptr, 0, total);
         let params = std::slice::from_raw_parts(params_ptr, count as usize);
         std::ptr::copy_nonoverlapping(params.as_ptr() as *const u8, out_ptr, params.len() * 4);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    unsafe extern "C" fn dummy_setup_accelerator(acc: *const AcceleratorHandle) -> u32 {
+        if acc.is_null() {
+            return 1;
+        }
+        let h = unsafe { &*acc };
+        if h.version != AcceleratorHandle::CURRENT_VERSION {
+            return 2;
+        }
+        0
+    }
+
+    unsafe extern "C" fn dummy_meta() -> *const EffectMeta {
+        std::ptr::null()
+    }
+    unsafe extern "C" fn dummy_wgsl() -> WgslSource {
+        WgslSource {
+            ptr: std::ptr::null(),
+            len: 0,
+        }
+    }
+    unsafe extern "C" fn dummy_uniform_size() -> u32 {
+        0
+    }
+    unsafe extern "C" fn dummy_pack_uniform(_: *const f32, _: u32, _: *mut u8) {}
+
+    #[test]
+    fn test_vtable_setup_accelerator_invocation() {
+        let vtable = EffectVTable {
+            meta: dummy_meta,
+            wgsl: dummy_wgsl,
+            uniform_size: dummy_uniform_size,
+            pack_uniform: dummy_pack_uniform,
+            requires_texture_param: None,
+            calc_roi: None,
+            is_need_render_frame: None,
+            process_audio: None,
+            on_property_edited: None,
+            on_property_restored: None,
+            poll_writeback: None,
+            setup_accelerator: Some(dummy_setup_accelerator),
+        };
+
+        let handle = AcceleratorHandle::new(
+            AcceleratorBackend::Vulkan,
+            0x10 as *const (),
+            0x20 as *const (),
+        );
+        let f = vtable.setup_accelerator.unwrap();
+        assert_eq!(unsafe { f(&handle as *const _) }, 0);
+        assert_eq!(unsafe { f(std::ptr::null()) }, 1);
     }
 }

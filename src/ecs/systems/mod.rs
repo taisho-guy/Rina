@@ -476,6 +476,7 @@ mod tests {
         wgsl: dummy_wgsl,
         render: dummy_render,
         read_ref_layer: None,
+        setup_accelerator: None,
     };
 
     static DUMMY_LIGHT_VTABLE: neoutl_object_api::ObjectVTable = neoutl_object_api::ObjectVTable {
@@ -484,6 +485,7 @@ mod tests {
         wgsl: dummy_wgsl,
         render: dummy_render,
         read_ref_layer: None,
+        setup_accelerator: None,
     };
 
     fn setup_camera_kind() -> u32 {

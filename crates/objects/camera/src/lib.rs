@@ -87,6 +87,18 @@ unsafe extern "C" fn wgsl() -> WgslSource {
 }
 
 unsafe extern "C" fn render(_ctx: *const RenderContext) {}
+unsafe extern "C" fn setup_accelerator(
+    accelerator: *const neoutl_object_api::AcceleratorHandle,
+) -> u32 {
+    if accelerator.is_null() {
+        return 1;
+    }
+    let handle = unsafe { &*accelerator };
+    if handle.version != neoutl_object_api::AcceleratorHandle::CURRENT_VERSION {
+        return 2;
+    }
+    0
+}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn neoutl_object_entry() -> *const ObjectVTable {
@@ -96,6 +108,7 @@ pub unsafe extern "C" fn neoutl_object_entry() -> *const ObjectVTable {
         wgsl,
         render,
         read_ref_layer: None,
+        setup_accelerator: Some(setup_accelerator),
     })
 }
 

@@ -134,6 +134,7 @@
 "[neoutl-video-decoder][診断][近似フレーム配信] requested_target={requested_target} target={target}": "[neoutl-video-decoder][診断][近似フレーム配信] requested_target={requested_target} target={target}"
 "[neoutl-video-decoder][非対応] probe判定: {} ({failure:?}) open失敗: {e}": "[neoutl-video-decoder][非対応] probe判定: {} ({failure:?}) open失敗: {e}"
 "[neoutl-video-decoder][非対応] wgpuデバイス未取得、昇格スキップ": "[neoutl-video-decoder][非対応] wgpuデバイス未取得、昇格スキップ"
+"[test] 2個目のGPUアダプタ非検出、テストskip": "[test] 2個目のGPUアダプタ非検出、テストskip"
 "[test] GPUアダプタ非検出、テストskip": "[test] GPUアダプタ非検出、テストskip"
 "[xtask] PATH合成失敗": "[xtask] PATH合成失敗"
 "[xtask] i18n/ja.ymlに変更なし": "[xtask] i18n/ja.ymlに変更なし"

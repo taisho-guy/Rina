@@ -31,7 +31,7 @@ use bind_layouts::{
     create_effect_bind_group_layout, create_media_bind_group_layout,
     create_video_bind_group_layout,
 };
-pub use device::{install_device_lost_watcher, is_device_lost};
+pub use device::{install_device_lost_watcher, is_device_lost, reset_device_lost};
 use shaders::{
     build_clip_composite_pipeline, build_composite_pipeline, build_effect_pipelines_from_registry,
     build_lua_compute_pipelines, build_media_pipeline, build_pipelines_from_registry,
@@ -336,6 +336,232 @@ impl RenderEngine {
             hot_reload_rx,
             scripts_dir,
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn reconfigure_accelerator(
+        &mut self,
+        new_device: Arc<wgpu::Device>,
+        new_queue: Arc<wgpu::Queue>,
+        backend_kind: neoutl_shared_abi::AcceleratorBackend,
+    ) {
+        install_device_lost_watcher(&new_device);
+        reset_device_lost();
+
+        let uniform_buffer = new_device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Standard Object Uniform Buffer"),
+            size: UNIFORM_STRIDE * MAX_OBJECTS,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group_layout =
+            new_device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Standard Object BGL"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: wgpu::BufferSize::new(STANDARD_UNIFORM_SIZE),
+                    },
+                    count: None,
+                }],
+            });
+
+        let bind_group = new_device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Standard Object BG"),
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &uniform_buffer,
+                    offset: 0,
+                    size: wgpu::BufferSize::new(STANDARD_UNIFORM_SIZE),
+                }),
+            }],
+        });
+
+        let texture = create_texture(&new_device, self.render_width, self.render_height);
+        let depth_texture =
+            create_depth_texture(&new_device, self.render_width, self.render_height);
+
+        let pipeline_layout = new_device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Standard Object Pipeline Layout"),
+            bind_group_layouts: &[Some(&bind_group_layout)],
+            immediate_size: 0,
+        });
+        let pipelines = build_pipelines_from_registry(&new_device, &pipeline_layout);
+
+        let effect_bind_group_layout = create_effect_bind_group_layout(&new_device);
+        let effect_pipeline_layout =
+            new_device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Effect Pipeline Layout"),
+                bind_group_layouts: &[Some(&effect_bind_group_layout)],
+                immediate_size: 0,
+            });
+        let effect_pipelines =
+            build_effect_pipelines_from_registry(&new_device, &effect_pipeline_layout);
+
+        let effect_sampler = new_device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Effect Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
+        let effect_uniform_buffer = new_device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Effect Uniform Buffer"),
+            size: MAX_EFFECT_UNIFORM_SIZE,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let effect_ping = create_effect_texture(&new_device, self.render_width, self.render_height);
+        let effect_pong = create_effect_texture(&new_device, self.render_width, self.render_height);
+
+        let effect_object_pool: Vec<wgpu::Texture> = Vec::new();
+        let effect_object_depth =
+            create_depth_texture(&new_device, self.render_width, self.render_height);
+
+        let composite_bind_group_layout = create_composite_bind_group_layout(&new_device);
+        let composite_pipeline_layout =
+            new_device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Composite Pipeline Layout"),
+                bind_group_layouts: &[Some(&composite_bind_group_layout)],
+                immediate_size: 0,
+            });
+        let composite_pipeline =
+            build_composite_pipeline(&new_device, &composite_pipeline_layout, COMPOSITE_WGSL);
+
+        let clip_composite_bind_group_layout = create_clip_composite_bind_group_layout(&new_device);
+        let clip_composite_pipeline_layout =
+            new_device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Clip Composite Pipeline Layout"),
+                bind_group_layouts: &[Some(&clip_composite_bind_group_layout)],
+                immediate_size: 0,
+            });
+        let clip_composite_pipeline = build_clip_composite_pipeline(
+            &new_device,
+            &clip_composite_pipeline_layout,
+            CLIP_COMPOSITE_WGSL,
+        );
+        let clip_uniform_buffer = new_device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Clip Uniform Buffer"),
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let media_bind_group_layout = create_media_bind_group_layout(&new_device);
+        let media_pipeline_layout =
+            new_device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Media Pipeline Layout"),
+                bind_group_layouts: &[Some(&media_bind_group_layout)],
+                immediate_size: 0,
+            });
+        let media_pipeline = build_media_pipeline(&new_device, &media_pipeline_layout, MEDIA_WGSL);
+        let media_uniform_buffer = new_device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Media Uniform Buffer"),
+            size: UNIFORM_STRIDE * MAX_OBJECTS,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let media_sampler = new_device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Media Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
+        let video_bind_group_layout = create_video_bind_group_layout(&new_device);
+        let video_pipeline_layout =
+            new_device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Video Pipeline Layout"),
+                bind_group_layouts: &[Some(&video_bind_group_layout)],
+                immediate_size: 0,
+            });
+        let video_pipeline = build_media_pipeline(&new_device, &video_pipeline_layout, VIDEO_WGSL);
+
+        let (reduce_mean_pipeline, reduce_mean_bind_group_layout) =
+            build_reduce_mean_pipeline(&new_device, REDUCE_MEAN_WGSL);
+        let reduce_mean_buffer = new_device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Reduce Mean Accumulator"),
+            size: 20,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let reduce_mean_readback_buffer = new_device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Reduce Mean Readback"),
+            size: 20,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let dummy_map_texture_view = create_dummy_map_texture_view(&new_device, &new_queue);
+
+        self.device = new_device.clone();
+        self.queue = new_queue.clone();
+        self.uniform_buffer = uniform_buffer;
+        self.bind_group = bind_group;
+        self.texture = texture;
+        self.depth_texture = depth_texture;
+        self.pipelines = pipelines;
+        self.effect_pipelines = effect_pipelines;
+        self.effect_bind_group_layout = effect_bind_group_layout;
+        self.effect_pipeline_layout = effect_pipeline_layout;
+        self.effect_sampler = effect_sampler;
+        self.effect_uniform_buffer = effect_uniform_buffer;
+        self.effect_ping = effect_ping;
+        self.effect_pong = effect_pong;
+        self.effect_object_pool = effect_object_pool;
+        self.effect_object_depth = effect_object_depth;
+        self.composite_pipeline = composite_pipeline;
+        self.composite_bind_group_layout = composite_bind_group_layout;
+        self.clip_composite_pipeline = clip_composite_pipeline;
+        self.clip_composite_bind_group_layout = clip_composite_bind_group_layout;
+        self.clip_uniform_buffer = clip_uniform_buffer;
+        self.media_pipeline = media_pipeline;
+        self.media_bind_group_layout = media_bind_group_layout;
+        self.media_uniform_buffer = media_uniform_buffer;
+        self.media_sampler = media_sampler;
+        self.video_pipeline = video_pipeline;
+        self.video_bind_group_layout = video_bind_group_layout;
+        self.reduce_mean_pipeline = reduce_mean_pipeline;
+        self.reduce_mean_bind_group_layout = reduce_mean_bind_group_layout;
+        self.reduce_mean_buffer = reduce_mean_buffer;
+        self.reduce_mean_readback_buffer = reduce_mean_readback_buffer;
+        self.dummy_map_texture_view = dummy_map_texture_view;
+        self.scene_texture_cache.clear();
+        self.map_texture_cache.clear();
+        self.text_targets.clear();
+        self.object_pipeline_layout = pipeline_layout;
+
+        let handle = neoutl_shared_abi::AcceleratorHandle::new(
+            backend_kind,
+            Arc::as_ptr(&new_device) as *const (),
+            Arc::as_ptr(&new_queue) as *const (),
+        );
+        crate::effects::broadcast_setup_accelerator(&handle);
+        crate::objects::broadcast_setup_accelerator(&handle);
+    }
+
+    #[allow(dead_code)]
+    pub fn reconfigure_from_shared_gpu(&mut self, shared_gpu: &crate::gpu_shared::SharedGpu) {
+        self.reconfigure_accelerator(
+            shared_gpu.device.clone(),
+            shared_gpu.queue.clone(),
+            shared_gpu.backend_kind(),
+        );
     }
 
     pub fn reduce_source_mean(&self) -> [f32; 4] {
