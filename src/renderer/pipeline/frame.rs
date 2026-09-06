@@ -409,11 +409,16 @@ impl RenderEngine {
                 } else if let (Some(texture), Some(offset)) =
                     (&media_frames[idx], media_offsets[idx])
                 {
-                    EffectObjectDrawKind::Media { texture, offset }
+                    EffectObjectDrawKind::Media {
+                        texture,
+                        offset,
+                        blend_mode: obj.blend_mode,
+                    }
                 } else if let Some((clip_instance, offset)) = text_draw_by_index.get(&idx) {
                     EffectObjectDrawKind::Text {
                         clip_instance: *clip_instance,
                         offset: *offset,
+                        blend_mode: obj.blend_mode,
                     }
                 } else {
                     idx += 1;
@@ -450,6 +455,7 @@ impl RenderEngine {
                         self.composite_effect_object(
                             &pool_tex,
                             if drawn_any { None } else { Some(clear_color) },
+                            obj.blend_mode,
                         );
                     }
                 }
@@ -515,10 +521,20 @@ impl RenderEngine {
                         self.draw_standard_pass(&mut rpass, &active_objects[i], offset);
                     }
                     if let (Some(texture), Some(offset)) = (&media_frames[i], media_offsets[i]) {
-                        self.draw_media_pass(&mut rpass, texture, offset);
+                        self.draw_media_pass(
+                            &mut rpass,
+                            texture,
+                            offset,
+                            active_objects[i].blend_mode,
+                        );
                     }
                     if let Some((clip_instance, offset)) = text_draw_by_index.get(&i) {
-                        self.draw_text_pass(&mut rpass, *clip_instance, *offset);
+                        self.draw_text_pass(
+                            &mut rpass,
+                            *clip_instance,
+                            *offset,
+                            active_objects[i].blend_mode,
+                        );
                     }
                 }
             }

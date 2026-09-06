@@ -3,8 +3,9 @@ use crate::ecs::EcsWorld;
 use crate::ecs::audio_plugins::PluginChain;
 use crate::ecs::components::ParamAccess;
 use crate::ecs::components::{
-    AudioParams, ClipTarget, GroupControl, KeyframeTracks, KindId, Layer, MediaSource, ObjectId,
-    PluginParams, SceneId, SceneObject, ShapeParams, TextContent, TimeRange,
+    AdjustmentLayer, AudioParams, BlendMode, ClipTarget, GroupControl, KeyframeTracks, KindId,
+    Layer, MaskStack, MediaSource, ObjectId, PluginParams, SceneId, SceneObject, ShapeParams,
+    TextContent, TimeRange, TimeRemap,
 };
 use crate::ecs::effects::EffectStack;
 use crate::ecs::object_query_views::ObjectQueryViews;
@@ -44,6 +45,15 @@ impl EcsWorld {
             GlobalMatrix::default(),
             EffectStack::default(),
         ));
+        self.world.add_component(
+            entity,
+            (
+                MaskStack::default(),
+                BlendMode::default(),
+                TimeRemap::default(),
+                AdjustmentLayer::default(),
+            ),
+        );
 
         let is_audio_kind = crate::objects::loader::by_kind_id(kind_id)
             .is_some_and(|p| p.stable_id == neoutl_object_api::AUDIO_STABLE_ID);
@@ -514,6 +524,15 @@ impl EcsWorld {
             audio2,
             stack_second,
         ));
+        self.world.add_component(
+            new_entity,
+            (
+                MaskStack::default(),
+                BlendMode::default(),
+                TimeRemap::default(),
+                AdjustmentLayer::default(),
+            ),
+        );
 
         if let Some(t) = text2 {
             self.world.add_component(new_entity, t);

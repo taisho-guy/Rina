@@ -1,4 +1,4 @@
-use crate::ecs::components::{ClipMode, MediaSource, ShapeParams, TextContent};
+use crate::ecs::components::{BlendMode, ClipMode, MediaSource, ShapeParams, TextContent};
 use crate::ecs::types::Value;
 use shipyard::EntityId;
 use std::collections::HashMap;
@@ -44,6 +44,7 @@ pub struct ActiveObject {
     pub layer: i32,
     pub clip_target: Option<ClipTargetInfo>,
     pub zbuffer_depth: Option<f32>,
+    pub blend_mode: BlendMode,
 }
 
 pub type CapturedObjects = HashMap<EntityId, Vec<ActiveObject>>;

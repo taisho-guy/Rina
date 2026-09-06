@@ -1,5 +1,6 @@
 use super::shaders::EffectObjectDrawKind;
 use super::*;
+use crate::ecs::components::BlendMode;
 
 impl RenderEngine {
     pub(super) fn apply_effect_chain(
@@ -209,8 +210,8 @@ impl RenderEngine {
         obj: &ActiveObject,
         offset: u32,
     ) {
-        if let Some((pipeline, vertex_count)) = self.pipelines.get(&obj.kind_id) {
-            rpass.set_pipeline(pipeline);
+        if let Some((pipelines, vertex_count)) = self.pipelines.get(&obj.kind_id) {
+            rpass.set_pipeline(&pipelines[obj.blend_mode.pipeline_index() as usize]);
             rpass.set_bind_group(0, &self.bind_group, &[offset]);
             rpass.draw(0..*vertex_count, 0..1);
         }
@@ -221,7 +222,9 @@ impl RenderEngine {
         rpass: &mut wgpu::RenderPass,
         texture: &wgpu::Texture,
         offset: u32,
+        blend_mode: BlendMode,
     ) {
+        let variant = blend_mode.pipeline_index() as usize;
         let is_planar = matches!(texture.format(), wgpu::TextureFormat::NV12);
         if is_planar {
             let plane_y = texture.create_view(&wgpu::TextureViewDescriptor {
@@ -258,7 +261,7 @@ impl RenderEngine {
                     },
                 ],
             });
-            rpass.set_pipeline(&self.video_pipeline);
+            rpass.set_pipeline(&self.video_pipeline[variant]);
             rpass.set_bind_group(0, &bind_group, &[offset]);
             rpass.draw(0..6, 0..1);
         } else {
@@ -285,7 +288,7 @@ impl RenderEngine {
                     },
                 ],
             });
-            rpass.set_pipeline(&self.media_pipeline);
+            rpass.set_pipeline(&self.media_pipeline[variant]);
             rpass.set_bind_group(0, &bind_group, &[offset]);
             rpass.draw(0..6, 0..1);
         }
@@ -296,6 +299,7 @@ impl RenderEngine {
         rpass: &mut wgpu::RenderPass,
         clip_instance: u64,
         offset: u32,
+        blend_mode: BlendMode,
     ) {
         let Some(target) = self.text_targets.get(&clip_instance) else {
             return;
@@ -325,7 +329,7 @@ impl RenderEngine {
                 },
             ],
         });
-        rpass.set_pipeline(&self.media_pipeline);
+        rpass.set_pipeline(&self.media_pipeline[blend_mode.pipeline_index() as usize]);
         rpass.set_bind_group(0, &bind_group, &[offset]);
         rpass.draw(0..6, 0..1);
     }
@@ -372,14 +376,19 @@ impl RenderEngine {
                 EffectObjectDrawKind::Standard { obj, offset } => {
                     self.draw_standard_pass(&mut rpass, obj, offset);
                 }
-                EffectObjectDrawKind::Media { texture, offset } => {
-                    self.draw_media_pass(&mut rpass, texture, offset);
+                EffectObjectDrawKind::Media {
+                    texture,
+                    offset,
+                    blend_mode,
+                } => {
+                    self.draw_media_pass(&mut rpass, texture, offset, blend_mode);
                 }
                 EffectObjectDrawKind::Text {
                     clip_instance,
                     offset,
+                    blend_mode,
                 } => {
-                    self.draw_text_pass(&mut rpass, clip_instance, offset);
+                    self.draw_text_pass(&mut rpass, clip_instance, offset, blend_mode);
                 }
             }
         }
@@ -390,6 +399,7 @@ impl RenderEngine {
         &self,
         pool_tex: &wgpu::Texture,
         clear_color: Option<wgpu::Color>,
+        blend_mode: BlendMode,
     ) {
         let src_view = pool_tex.create_view(&wgpu::TextureViewDescriptor::default());
         let dst_view = self
@@ -454,7 +464,7 @@ impl RenderEngine {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            rpass.set_pipeline(&self.composite_pipeline);
+            rpass.set_pipeline(&self.composite_pipeline[blend_mode.pipeline_index() as usize]);
             rpass.set_bind_group(0, &bind_group, &[]);
             rpass.draw(0..3, 0..1);
         }

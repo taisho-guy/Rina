@@ -652,6 +652,53 @@ pub fn group_control_section(ui: &mut egui::Ui, world: &mut EcsWorld, id: usize)
     }
 }
 
+const BLEND_MODE_OPTIONS: [(crate::ecs::components::BlendMode, &str); 9] = [
+    (crate::ecs::components::BlendMode::Normal, "通常"),
+    (crate::ecs::components::BlendMode::Add, "加算"),
+    (crate::ecs::components::BlendMode::Multiply, "乗算"),
+    (crate::ecs::components::BlendMode::Screen, "スクリーン"),
+    (crate::ecs::components::BlendMode::Overlay, "オーバーレイ"),
+    (crate::ecs::components::BlendMode::Darken, "比較(暗)"),
+    (crate::ecs::components::BlendMode::Lighten, "比較(明)"),
+    (crate::ecs::components::BlendMode::Difference, "差の絶対値"),
+    (crate::ecs::components::BlendMode::Exclusion, "除外"),
+];
+
+pub fn compositing_section(ui: &mut egui::Ui, world: &mut EcsWorld, id: usize) {
+    ui.separator();
+    ui.colored_label(egui::Color32::from_rgb(0x8a, 0xab, 0xff), t!("合成"));
+
+    ui.horizontal(|ui| {
+        ui.label(t!("ブレンドモード"));
+        let current_mode = world.blend_mode_of(id);
+        let mut current = BLEND_MODE_OPTIONS
+            .iter()
+            .position(|(m, _)| *m == current_mode)
+            .unwrap_or(0);
+        let resp = ui.add(
+            Select::new((id, "blend_mode"), &mut current).options(
+                BLEND_MODE_OPTIONS
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (_, label))| (i, *label)),
+            ),
+        );
+        if resp.changed() {
+            if let Some((mode, _)) = BLEND_MODE_OPTIONS.get(current) {
+                world.set_blend_mode(id, *mode);
+            }
+        }
+    });
+
+    ui.horizontal(|ui| {
+        ui.label(t!("調整レイヤー"));
+        let mut enabled = world.is_adjustment_layer(id);
+        if ui.add(Checkbox::new(&mut enabled, "")).changed() {
+            world.set_adjustment_layer(id, enabled);
+        }
+    });
+}
+
 pub fn clip_target_section(ui: &mut egui::Ui, world: &mut EcsWorld, id: usize) {
     let mut ct = world.get_clip_target(id);
     ui.separator();

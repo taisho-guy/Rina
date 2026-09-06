@@ -1,11 +1,21 @@
 pub use neoutl_shared_abi::{Dimensionality, FfiSlice, ParamKind, ParamSchema, StrRef, WgslSource};
 
 #[repr(C)]
+pub struct PropertyGroup {
+    pub group_id: StrRef,
+    pub schema: FfiSlice<ParamSchema>,
+}
+unsafe impl Send for PropertyGroup {}
+unsafe impl Sync for PropertyGroup {}
+
+pub const DEFAULT_PROPERTY_GROUP_ID: &str = "default";
+
+#[repr(C)]
 pub struct ObjectMeta {
     pub stable_id: &'static str,
     pub name: &'static str,
     pub dimensionality: Dimensionality,
-    pub property_schema: FfiSlice<ParamSchema>,
+    pub property_groups: FfiSlice<PropertyGroup>,
 }
 unsafe impl Send for ObjectMeta {}
 unsafe impl Sync for ObjectMeta {}
@@ -19,6 +29,8 @@ pub struct RenderContext {
     pub mvp_matrix: [f32; 16],
     pub opacity: f32,
     pub depth_enabled: bool,
+    pub ref_layer_texture_ptr: *const (),
+    pub ref_layer_texture_count: u32,
 }
 
 #[repr(C)]
@@ -27,6 +39,9 @@ pub struct ObjectVTable {
     pub vertex_count: unsafe extern "C" fn() -> u32,
     pub wgsl: unsafe extern "C" fn() -> WgslSource,
     pub render: unsafe extern "C" fn(ctx: *const RenderContext),
+
+    pub read_ref_layer:
+        Option<unsafe extern "C" fn(ctx: *const RenderContext, index: u32) -> *const ()>,
 }
 
 pub const UNIT_SIZE_PX: f32 = 200.0;

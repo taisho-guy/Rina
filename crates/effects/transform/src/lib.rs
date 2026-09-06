@@ -1,6 +1,6 @@
 use neoutl_effect_api::{
-    EffectMeta, EffectParamSchema, EffectVTable, ParamKind, StrRef, WgslSource, pack_uniform_std,
-    uniform_size_std,
+    EffectKind, EffectMeta, EffectParamSchema, EffectVTable, ParamKind, StrRef, WgslSource,
+    pack_uniform_std, uniform_size_std,
 };
 use std::sync::OnceLock;
 
@@ -34,6 +34,12 @@ static META: EffectMeta = EffectMeta {
     name: "Transform",
     category: "Geometry",
     param_schema: neoutl_effect_api::FfiSlice::from_static(PARAM_SCHEMA),
+    kind: EffectKind::Image,
+    author: StrRef::from_str("NeoUtl"),
+    description: StrRef::empty(),
+    uuid: StrRef::from_str("transform"),
+    is_dummy: 0,
+    use_composition_camera: 0,
 };
 static VTABLE: OnceLock<EffectVTable> = OnceLock::new();
 
@@ -61,6 +67,12 @@ pub unsafe extern "C" fn neoutl_effect_entry() -> *const EffectVTable {
         uniform_size,
         pack_uniform,
         requires_texture_param: None,
+        calc_roi: None,
+        is_need_render_frame: None,
+        process_audio: None,
+        on_property_edited: None,
+        on_property_restored: None,
+        poll_writeback: None,
     })
 }
 

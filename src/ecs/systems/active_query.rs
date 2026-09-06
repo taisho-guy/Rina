@@ -3,8 +3,8 @@ use super::camera::{projection_for, resolve_camera, zbuffer_sort_key};
 use super::curtain::{ControllerKind, CurtainInfo, group_only, resolve_group_chain};
 use super::types::{ActiveObject, CapturedObjects, ClipTargetInfo, ComposeSource, FrameBufferKind};
 use crate::ecs::components::{
-    AudioParams, ClipTarget, GroupControl, KeyframeTracks, KindId, Layer, MediaSource, ObjectId,
-    SceneId, SceneObject, ShapeParams, TextContent, TimeRange,
+    AudioParams, BlendMode, ClipTarget, GroupControl, KeyframeTracks, KindId, Layer, MaskStack,
+    MediaSource, ObjectId, SceneId, SceneObject, ShapeParams, TextContent, TimeRange, TimeRemap,
 };
 use crate::ecs::effects::{EffectStack, compute_effect_params_at};
 use crate::ecs::resources::{
@@ -44,6 +44,11 @@ type PayloadGroupViews<'v> = (
     View<'v, AudioParams>,
     View<'v, EffectStack>,
     View<'v, GroupControl>,
+);
+type TimingGroupViews<'v> = (
+    View<'v, TimeRemap>,
+    View<'v, MaskStack>,
+    View<'v, BlendMode>,
 );
 
 pub(crate) fn is_active_at(
@@ -86,7 +91,8 @@ pub fn get_active_objects_system_at(
             _audio_params,
             effect_stacks,
             group_controls,
-        ): PayloadGroupViews| {
+        ): PayloadGroupViews,
+         (time_remaps, mask_stacks, blend_modes): TimingGroupViews| {
             let project_width = project.width.max(1) as f32;
             let project_height = project.height.max(1) as f32;
             let max_depth = system_settings.max_group_chain_depth;
@@ -211,8 +217,12 @@ pub fn get_active_objects_system_at(
                 }
 
                 let media_source = media_sources.get(id).ok().cloned();
+                let layer_frame = current - range.start_frame;
+                let remapped_layer_frame = time_remaps
+                    .get(id)
+                    .map_or(layer_frame, |r| r.resolve(layer_frame, layer_frame));
                 let source_frame = media_source.as_ref().map_or(0, |m| {
-                    let base = f64::from(current - range.start_frame);
+                    let base = f64::from(remapped_layer_frame);
                     let ratio = if matches!(m.kind, MediaKind::Video) {
                         let src_fps = neoutl_media_runtime::cache::global()
                             .source_fps(&m.path)
@@ -281,6 +291,10 @@ pub fn get_active_objects_system_at(
                 for &i in &group_idx {
                     opacity *= controllers[i].opacity;
                 }
+                if let Ok(stack) = mask_stacks.get(id) {
+                    opacity *= stack.opacity_factor_at_origin();
+                }
+                let blend_mode = blend_modes.get(id).copied().unwrap_or_default();
                 let mut effects = effect_stacks
                     .get(id)
                     .map(|stack| compute_effect_params_at(stack, current, world))
@@ -321,6 +335,7 @@ pub fn get_active_objects_system_at(
                     layer: obj_layer,
                     clip_target,
                     zbuffer_depth,
+                    blend_mode,
                 };
 
                 let fb_pos = chain_idx.iter().position(|&i| {
@@ -524,6 +539,7 @@ pub fn get_active_objects_system_at(
                             layer: c.layer,
                             clip_target: None,
                             zbuffer_depth: self_zbuffer_depth,
+                            blend_mode: BlendMode::default(),
                         });
                     }
                     ControllerKind::Clip { .. } => {
@@ -566,6 +582,7 @@ pub fn get_active_objects_system_at(
                             layer: c.layer,
                             clip_target: None,
                             zbuffer_depth: self_zbuffer_depth,
+                            blend_mode: BlendMode::default(),
                         };
                         captured
                             .entry(c.entity)

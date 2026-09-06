@@ -1,4 +1,6 @@
-pub use neoutl_shared_abi::{FfiSlice, ParamKind, StrRef, WgslSource};
+pub use neoutl_shared_abi::{
+    EffectKind, FfiSlice, ParamKind, PropertyWriteback, Roi, StrRef, WgslSource,
+};
 pub type EffectParamSchema = neoutl_shared_abi::ParamSchema;
 
 #[repr(C)]
@@ -7,6 +9,12 @@ pub struct EffectMeta {
     pub name: &'static str,
     pub category: &'static str,
     pub param_schema: FfiSlice<EffectParamSchema>,
+    pub kind: EffectKind,
+    pub author: StrRef,
+    pub description: StrRef,
+    pub uuid: StrRef,
+    pub is_dummy: u8,
+    pub use_composition_camera: u8,
 }
 unsafe impl Send for EffectMeta {}
 unsafe impl Sync for EffectMeta {}
@@ -18,6 +26,36 @@ pub struct EffectVTable {
     pub uniform_size: unsafe extern "C" fn() -> u32,
     pub pack_uniform: unsafe extern "C" fn(params_ptr: *const f32, count: u32, out_ptr: *mut u8),
     pub requires_texture_param: Option<unsafe extern "C" fn() -> u32>,
+
+    pub calc_roi: Option<
+        unsafe extern "C" fn(
+            base: Roi,
+            params_ptr: *const f32,
+            count: u32,
+            layer_time_us: i64,
+            downsample_x: f32,
+            downsample_y: f32,
+        ) -> Roi,
+    >,
+
+    pub is_need_render_frame:
+        Option<unsafe extern "C" fn(params_ptr: *const f32, count: u32, layer_time_us: i64) -> u32>,
+
+    pub process_audio: Option<
+        unsafe extern "C" fn(
+            samples_ptr: *mut f32,
+            sample_count: u32,
+            params_ptr: *const f32,
+            param_count: u32,
+        ) -> u32,
+    >,
+
+    pub on_property_edited: Option<unsafe extern "C" fn(params_ptr: *const f32, count: u32)>,
+
+    pub on_property_restored: Option<unsafe extern "C" fn(params_ptr: *const f32, count: u32)>,
+
+    pub poll_writeback:
+        Option<unsafe extern "C" fn(out_ptr: *mut PropertyWriteback, out_cap: u32) -> u32>,
 }
 
 pub const ENTRY_SYMBOL: &[u8] = b"neoutl_effect_entry\0";

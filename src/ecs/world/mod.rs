@@ -2,6 +2,7 @@ mod audio_params;
 mod audio_plugins;
 mod core;
 mod effects;
+mod hierarchy_ops;
 mod keyframes;
 mod object_crud;
 mod scene;

@@ -123,10 +123,7 @@ pub fn property_row(
             out.label_clicked = true;
         }
 
-        ui.scope(|ui| {
-            if !has_keyframes {
-                ui.set_opacity(0.35);
-            }
+        ui.add_enabled_ui(has_keyframes, |ui| {
             let box_r = ui.add_sized(
                 [BOX_W, row_height],
                 egui::DragValue::new(&mut end_v)
@@ -252,10 +249,7 @@ pub fn color_row(
             out.label_clicked = true;
         }
 
-        ui.scope(|ui| {
-            if !has_keyframes {
-                ui.set_opacity(0.35);
-            }
+        ui.add_enabled_ui(has_keyframes, |ui| {
             let picker_r = ui
                 .allocate_ui_with_layout(
                     egui::vec2(BOX_W, row_height),

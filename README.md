@@ -1,14 +1,8 @@
-<p align="center"><img src= "assets/icon-shadowed.svg"/></p>
-<h1 align="center">NeoUtl</h1>
-<p align="center">
-<a href="https://neoutl.taisho-guy.org">公式サイト</a> /
-<a href="https://codeberg.org/taisho-guy/NeoUtl">Codeberg</a> /
-<a href="https://codeberg.org/taisho-guy/NeoUtl/wiki/Home">Wiki</a> /
-<a href="https://codeberg.org/taisho-guy/NeoUtl/src/branch/aviqtl">AviQtl</a>
-</p>
-<p align="center">
+# NeoUtl
+
+[公式サイト](https://neoutl.taisho-guy.org) / [Codeberg](https://codeberg.org/taisho-guy/NeoUtl) / [Wiki](https://codeberg.org/taisho-guy/NeoUtl/wiki/Home) / [AviQtl](https://codeberg.org/taisho-guy/NeoUtl/src/branch/aviqtl)
+
 NeoUtl: Ever Optimize &mdash; Until Triumphing Liberty.
-</p>
 
 ## NeoUtlとは
 
@@ -284,6 +278,15 @@ flowchart TB
 バグ報告、提案、議論などについては、[イシュー](https://codeberg.org/taisho-guy/NeoUtl/issues)を作成して下さい。
 
 プルリクエスト、イシュー共に、テンプレートに従って下さい。日本語でお願い致します。
+
+## スペシャルサンクス
+
+| プロジェクト名 | ライセンス | 参考内容 |
+| --- | --- | --- |
+| [AviUtl](https://spring-fragrance.mints.ne.jp/aviutl/) | プロプライエタリ | GUI/概念の構成 |
+| [NiVE3](https://www.nive.jp/) | GPLv3 | 実装設計 |
+
+> これらのプロジェクトからはソースコード等を一切流用しておりません。
 
 ## ライセンス
 

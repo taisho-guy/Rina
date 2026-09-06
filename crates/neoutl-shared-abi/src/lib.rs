@@ -21,6 +21,14 @@ pub enum ParamKind {
     Folder = 9,
 }
 
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EffectKind {
+    Image = 0,
+    Audio = 1,
+    Both = 2,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct StrRef {
@@ -33,6 +41,13 @@ impl StrRef {
         Self {
             ptr: s.as_ptr(),
             len: s.len(),
+        }
+    }
+
+    pub const fn empty() -> Self {
+        Self {
+            ptr: std::ptr::null(),
+            len: 0,
         }
     }
 
@@ -138,6 +153,25 @@ impl ParamSchema {
         }
     }
 }
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Roi {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PropertyWriteback {
+    pub key: StrRef,
+    pub value: f32,
+    pub is_user_action: u8,
+}
+unsafe impl Send for PropertyWriteback {}
+unsafe impl Sync for PropertyWriteback {}
 
 #[derive(Debug)]
 pub enum PluginError {
