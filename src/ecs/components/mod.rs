@@ -1,5 +1,6 @@
 mod audio;
 mod clip_target;
+mod expression;
 mod group_control;
 mod hierarchy;
 mod param_access;
@@ -9,6 +10,8 @@ mod time_remap;
 
 pub use audio::AudioParams;
 pub use clip_target::{ClipMode, ClipTarget};
+#[allow(unused_imports)]
+pub use expression::{ExpressionBinding, PropertyExpressions};
 pub use group_control::{GroupControl, SceneObject};
 pub use hierarchy::ParentRef;
 pub use param_access::{KindId, Layer, ObjectId, ParamAccess, SceneId, TimeRange};

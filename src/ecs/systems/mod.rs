@@ -4,10 +4,13 @@ mod active_query;
 mod audio;
 mod camera;
 mod curtain;
+pub mod expression;
 mod types;
 
 pub use active_query::{get_active_objects_system, get_active_objects_system_at};
 pub use audio::get_active_audio_system;
+#[allow(unused_imports)]
+pub use expression::evaluate_expressions_for_world;
 pub use types::{ActiveObject, CapturedObjects, ComposeSource, FrameBufferKind};
 
 #[cfg(test)]

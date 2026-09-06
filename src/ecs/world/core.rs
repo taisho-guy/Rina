@@ -6,7 +6,7 @@ use crate::ecs::resources::{
     TimelineResource,
 };
 use crate::ecs::transform::Camera;
-use shipyard::{UniqueView, UniqueViewMut, World};
+use shipyard::{AddComponent, Get, UniqueView, UniqueViewMut, World};
 
 impl EcsWorld {
     pub fn new() -> Self {
@@ -135,5 +135,89 @@ impl EcsWorld {
         } else {
             false
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn set_property_expression(
+        &mut self,
+        object_id: usize,
+        prop_key: &str,
+        script: &str,
+        enabled: bool,
+    ) -> bool {
+        let Some(entity) = self.find_entity(object_id) else {
+            return false;
+        };
+
+        let success = self.world.run(
+            |mut exprs: shipyard::ViewMut<crate::ecs::components::PropertyExpressions>| {
+                if let Ok(mut comp) = (&mut exprs).get(entity) {
+                    comp.set_expression(prop_key, script, enabled)
+                } else {
+                    let mut comp = crate::ecs::components::PropertyExpressions::new();
+                    let ok = comp.set_expression(prop_key, script, enabled);
+                    if ok {
+                        let _ = exprs.add_component_unchecked(entity, comp);
+                    }
+                    ok
+                }
+            },
+        );
+
+        if success {
+            self.touch();
+        }
+        success
+    }
+
+    #[allow(dead_code)]
+    pub fn get_property_expression(
+        &self,
+        object_id: usize,
+        prop_key: &str,
+    ) -> Option<(String, bool)> {
+        let entity = self.find_entity(object_id)?;
+        self.world.run(
+            |exprs: shipyard::View<crate::ecs::components::PropertyExpressions>| {
+                let comp = exprs.get(entity).ok()?;
+                let (script, enabled) = comp.get_expression(prop_key)?;
+                Some((script.to_string(), enabled))
+            },
+        )
+    }
+
+    #[allow(dead_code)]
+    pub fn remove_property_expression(&mut self, object_id: usize, prop_key: &str) -> bool {
+        let Some(entity) = self.find_entity(object_id) else {
+            return false;
+        };
+
+        let removed = self.world.run(
+            |mut exprs: shipyard::ViewMut<crate::ecs::components::PropertyExpressions>| {
+                if let Ok(mut comp) = (&mut exprs).get(entity) {
+                    comp.remove_expression(prop_key)
+                } else {
+                    false
+                }
+            },
+        );
+
+        if removed {
+            self.touch();
+        }
+        removed
+    }
+
+    #[allow(dead_code)]
+    pub fn evaluate_expressions(&mut self, frame: i32, fps: f32) -> usize {
+        let count = crate::ecs::systems::expression::evaluate_expressions_for_world(
+            &mut self.world,
+            frame,
+            fps,
+        );
+        if count > 0 {
+            self.touch();
+        }
+        count
     }
 }

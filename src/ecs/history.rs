@@ -1,4 +1,5 @@
 use neoutl_shared_abi::PropertyWriteback;
+#[allow(unused_imports)]
 use shipyard::{Get, IntoIter, Unique, UniqueView, UniqueViewMut, View, ViewMut, World};
 
 pub trait HistoryCommand: Send + Sync {

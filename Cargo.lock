@@ -29,6 +29,7 @@ dependencies = [
  "neoutl-easing-standard",
  "neoutl-effect-api",
  "neoutl-effect-lua",
+ "neoutl-expression-api",
  "neoutl-lua-runtime",
  "neoutl-media-api",
  "neoutl-media-runtime",
@@ -3221,6 +3222,13 @@ dependencies = [
  "neoutl-effect-api",
  "neoutl-effect-shader-build",
  "rust-i18n",
+]
+
+[[package]]
+name = "neoutl-expression-api"
+version = "0.0.0"
+dependencies = [
+ "neoutl-shared-abi",
 ]
 
 [[package]]

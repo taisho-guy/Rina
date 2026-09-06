@@ -455,6 +455,46 @@ fn string_literals(source: &str) -> Vec<String> {
     let mut result = Vec::new();
     let mut chars = source.char_indices().peekable();
     while let Some((_, c)) = chars.next() {
+        if c == '/' {
+            if let Some(&(_, '/')) = chars.peek() {
+                chars.next();
+                for (_, nc) in chars.by_ref() {
+                    if nc == '\n' {
+                        break;
+                    }
+                }
+                continue;
+            } else if let Some(&(_, '*')) = chars.peek() {
+                chars.next();
+                let mut depth = 1;
+                while let Some((_, nc)) = chars.next() {
+                    if nc == '/' && chars.peek().map(|&(_, c)| c) == Some('*') {
+                        chars.next();
+                        depth += 1;
+                    } else if nc == '*' && chars.peek().map(|&(_, c)| c) == Some('/') {
+                        chars.next();
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                }
+                continue;
+            }
+        }
+        if c == '\'' {
+            let mut is_escaped = false;
+            for (_, ch) in chars.by_ref() {
+                if is_escaped {
+                    is_escaped = false;
+                } else if ch == '\\' {
+                    is_escaped = true;
+                } else if ch == '\'' {
+                    break;
+                }
+            }
+            continue;
+        }
         if c != '"' {
             continue;
         }

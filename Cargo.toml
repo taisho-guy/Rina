@@ -9,6 +9,7 @@ members = [
     "crates/neoutl-effect-lua",
     "crates/neoutl-lua-runtime",
     "crates/neoutl-easing-api",
+    "crates/neoutl-expression-api",
     "crates/easings/neoutl-easing-standard",
     "crates/objects/*",
     "crates/effects/*",
@@ -43,6 +44,7 @@ neoutl-effect-api = { path = "crates/neoutl-effect-api" }
 neoutl-effect-lua = { path = "crates/neoutl-effect-lua" }
 neoutl-lua-runtime = { path = "crates/neoutl-lua-runtime" }
 neoutl-easing-api = { path = "crates/neoutl-easing-api" }
+neoutl-expression-api = { path = "crates/neoutl-expression-api" }
 neoutl-media-api = { path = "crates/neoutl-media-api" }
 neoutl-media-runtime = { path = "crates/neoutl-media-runtime" }
 neoutl-mlt-api = { path = "crates/neoutl-mlt-api" }
@@ -75,6 +77,7 @@ neoutl-effect-api.workspace = true
 neoutl-effect-lua.workspace = true
 neoutl-lua-runtime.workspace = true
 neoutl-easing-api.workspace = true
+neoutl-expression-api.workspace = true
 neoutl-media-api.workspace = true
 neoutl-media-runtime.workspace = true
 neoutl-mlt-api.workspace = true
